@@ -275,6 +275,57 @@ never finishes validating a fat binary that size on a GUI launch out of
 `/Applications` — the app sits in dyld with no window, no server and no crash
 report. Thin sidecars launch fine, and each download is half the size.
 
+### Signing and notarizing the macOS app
+
+Without notarization every downloaded copy is refused by Gatekeeper and each user
+has to clear the quarantine flag by hand. To make a plain double-click work, build
+with a Developer ID and let Apple notarize it. One-time setup on the build Mac:
+
+1. **Create a Developer ID Application certificate.** In Xcode: Settings -> Accounts
+   -> your team -> Manage Certificates -> **+** -> *Developer ID Application*. An
+   *Apple Distribution* certificate is for the App Store and will not work here.
+   Confirm with `security find-identity -v -p codesigning`.
+2. **Create an App Store Connect API key** at appstoreconnect.apple.com -> Users and
+   Access -> Integrations -> App Store Connect API -> Team Keys, role **Developer**.
+   Download the `.p8` (only downloadable once) and note the Key ID and Issuer ID.
+3. **Store the credentials** in the keychain:
+
+   ```sh
+   xcrun notarytool store-credentials lecture-react \
+     --key /path/to/AuthKey_XXXXXXXX.p8 --key-id <KEY_ID> --issuer <ISSUER_ID>
+   ```
+
+Then build with both variables set:
+
+```sh
+LR_MACOS_IDENTITY="Developer ID Application: YOUR NAME (TEAMID)" \
+LR_NOTARY_PROFILE=lecture-react \
+pnpm build:macos:app
+```
+
+The build signs `lr-server` first and the bundle second — signing the app seals
+whatever its nested binaries look like at that moment — applies the hardened
+runtime with `apps/overlay/src-tauri/entitlements.plist`, submits to Apple, waits,
+staples the ticket into the `.app`, and only then makes the ZIP. A stapled app
+reports *accepted, source=Notarized Developer ID* from `spctl -a -vv` and opens
+with an ordinary double-click.
+
+The entitlements are load-bearing, not boilerplate: the hardened runtime forbids
+JIT, and both WKWebView and the Node-based server map executable pages. Without
+them a notarized build launches and then dies as soon as either runs JavaScript.
+
+Set neither variable and the build stays ad-hoc signed, exactly as before.
+
+### Why a Mac will not open the app
+
+```sh
+bash tools/diagnose-macos.sh "/path/to/Lecture React.app"
+```
+
+It names the cause — wrong architecture for this Mac, an old universal build, a
+quarantine flag still attached, or a broken signature — then launches the app and
+reports whether a window and the bundled server actually came up.
+
 For standard installers, build on the destination operating system: macOS produces a `.app`/`.dmg`, Windows
 produces native Windows installers, and Linux produces Linux packages. Use matching
 x64 or arm64 Node and Rust toolchains and install the Tauri prerequisites above.
