@@ -87,8 +87,13 @@ The only way to make a plain double-click work for everyone is to sign with a
 a paid Apple Developer account; an *Apple Distribution* certificate is for the App
 Store and will not do it.
 
-Runs on Apple Silicon and Intel Macs; both architectures are in the one app.
-Settings live in your home folder rather than inside the bundle, so copying the app
+There is deliberately no universal build. A universal app needs a universal server
+sidecar, and at ~220 MB macOS never finishes validating it on launch: the app sits in
+`dyld` with no window, no server and no crash report, forever. Thin per-architecture
+sidecars launch normally, and each download is less than half the size.
+
+The first launch can take 10-30 seconds while macOS checks the app; later launches are
+quick. Settings live in your home folder rather than inside the bundle, so copying the app
 to another Mac starts it fresh. Active classes and questions are held in memory and
 end when the app closes.
 
@@ -338,6 +343,15 @@ Overlay checks on 2026-09-14 (v1.0.1, Chromium against the overlay window):
 - The results panel expanded to the centre of the screen at projector size and
   collapsed back to the corner, with the bars keeping their values across both.
 
+macOS launch fix on 2026-09-14 (v1.0.2):
+
+- The v1.0.0/v1.0.1 universal app **would not launch from /Applications**: the process
+  sat in `_dyld_start` with a 96 KB footprint, no window, no sidecar and no crash log,
+  indefinitely. Removing the 219 MB fat sidecar made it launch in 8 seconds; swapping in
+  a thin 108 MB sidecar made it launch fully. That is why the build is now per-architecture.
+- The per-architecture build was verified end to end: quarantined like a download, the
+  flag cleared, then launched — window and bundled server up, serving `/health`.
+
 These checks do not establish Windows/Linux runtime support or a complete desktop
 class session. The Windows/Linux cases in the tooling tests simulate platform
 selection; they do not run native Windows/Linux builds.
@@ -454,6 +468,7 @@ your clicker and your IDE all behave as if it were not running.
 | Answer a question | Read the cards down the right edge — newest at the bottom, most-upvoted highlighted. Click the checkmark when you have answered it; the card fades and slides away, and the student who asked sees `Answered`. |
 | Ask if they are following | Click **? Ask Class**. Every phone gets *Got it / Almost / Lost*, and the tally appears on your overlay within a second. It stays up for 20 seconds, then minimizes itself. |
 | Ask something specific | Alt-click (or long-press) **? Ask Class** for a quick poll composer: a question and 2-4 options. It is deliberately small — this is not a survey tool. |
+| Show a question to the room | Click the **expand** arrows on a question card, just left of its checkmark. That question fills the middle of the screen at projector size, with its vote count and an Answered button. Shrink it back with the same control. |
 | Show the result to the room | Click the **expand** arrows in the results panel's top-right corner. The tally pops out to the middle of the screen at projector size, so the back row can read it off the wall. Click the same button to send it back to the corner. While it is expanded it will not auto-minimize — it stays until you put it away. |
 | Know when something is wrong | Watch for the control strip to highlight with a named badge (`? Confused`, `Can't Hear`). It fires when a reaction reaches ~30% of the class, so you catch a spike peripherally instead of watching floaters while you talk. |
 | Hide reactions for a moment | Click **Reactions**, or press `CmdOrCtrl+Shift+H`. Reactions keep being collected and counted, they just stop moving on screen. Useful during a video, a demo, or an exam. `Can't See` / `Can't Hear` still show through — hiding a fault report would defeat the point. |

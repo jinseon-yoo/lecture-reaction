@@ -23,16 +23,18 @@ Packages the movable macOS app: `pnpm build:macos:app`.
 pnpm build:macos:app   # -> dist/Lecture-React-macOS-Universal{,.zip}
 ```
 
-It builds both Mac architectures and combines them, so one `.app` runs on Apple
-Silicon and Intel. Three details are load-bearing:
+It builds **one app per architecture**, not a universal one. Three details are
+load-bearing:
 
-- Tauri compiles each architecture separately and wants a sidecar named for each
-  triple, so `build-server-binary.mjs` writes both thin servers *and* a `lipo`'d
-  universal one. Tauri only copies one architecture's sidecar into the bundle, so
-  this script swaps the universal binary in afterwards.
-- `lipo` invalidates any signature on the slices, and Apple Silicon refuses to run
-  unsigned code at all — so the finished bundle is re-signed ad hoc. That is enough
-  to launch; it is not notarization, and the first open still needs right-click →
-  Open.
+- No universal build, ever. A universal app needs a universal sidecar, and the Node
+  SEA server is ~110 MB thin / ~220 MB fat. macOS never finishes validating the fat
+  one on a GUI launch: the app hangs in `_dyld_start` with no window, no server and
+  no crash report. Thin sidecars launch fine. `build-server-binary.mjs` now refuses
+  `universal-apple-darwin` outright so this cannot come back by accident.
+- Either Mac builds both architectures: the SEA blob is not architecture-locked, so
+  it drops into whichever official node is fetched for the target.
+- Tauri leaves the bundle unsigned and Apple Silicon refuses to run unsigned code, so
+  the finished bundle is re-signed ad hoc. That is enough to launch; it is not
+  notarization, and a downloaded copy still needs its quarantine flag cleared.
 - The archive is built with `ditto`, not `zip`. Only `ditto` keeps the bundle's
   symlinks and executable bits intact, and a mangled `.app` will not launch.
