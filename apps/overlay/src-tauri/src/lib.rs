@@ -334,6 +334,10 @@ fn toggle_quiet_shortcut() -> Shortcut {
 /// Port the server listens on, matching the frontend's default origin.
 const SERVER_PORT: u16 = 8787;
 
+/// `CREATE_NO_WINDOW` — keeps console windows from flashing over the slides.
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
 /// Handle to the server we started, so it dies with the app rather than
 /// lingering and holding the port.
 struct ServerProcess(Mutex<Option<std::process::Child>>);
@@ -387,7 +391,7 @@ fn start_server(app: &AppHandle) -> Option<std::process::Child> {
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
-        cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW: no server console over slides.
+        cmd.creation_flags(CREATE_NO_WINDOW); // no server console over the slides.
     }
 
     match cmd.spawn() {
@@ -399,6 +403,109 @@ fn start_server(app: &AppHandle) -> Option<std::process::Child> {
             eprintln!("[lecture-react] could not start bundled server: {err}");
             None
         }
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/* Windows Firewall                                                    */
+/* ------------------------------------------------------------------ */
+
+/// Name of the inbound rule the app manages.
+///
+/// Deliberately free of spaces: it travels through PowerShell into `cmd` into
+/// `netsh`, and quoting a value across three command lines is a good way to
+/// create a rule nobody can find again.
+#[cfg(windows)]
+const FIREWALL_RULE: &str = "Lecture-React-Server";
+
+/// What the launcher needs in order to decide whether to warn.
+#[derive(Clone, Serialize)]
+pub struct FirewallStatus {
+    /// Only Windows blocks inbound connections by default; elsewhere there is
+    /// nothing to check and nothing to offer.
+    supported: bool,
+    /// An inbound allow rule for the server port is present.
+    allowed: bool,
+}
+
+/// True when our inbound rule exists. Reading rules needs no elevation.
+#[cfg(windows)]
+fn firewall_rule_present() -> bool {
+    use std::os::windows::process::CommandExt;
+    std::process::Command::new("netsh")
+        .args([
+            "advfirewall",
+            "firewall",
+            "show",
+            "rule",
+            &format!("name={FIREWALL_RULE}"),
+        ])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+        .map(|out| out.status.success())
+        .unwrap_or(false)
+}
+
+/// Whether students can actually reach the server.
+///
+/// This is where a lecture machine fails far more often than anywhere else in
+/// the app. A school network is almost always classified Public, and Windows
+/// drops inbound connections on the Public profile by default — so the QR code
+/// encodes a perfectly correct address that no phone in the room can open.
+/// Nothing in the app can observe that from the inside: the server binds
+/// 0.0.0.0 and reports success either way.
+#[tauri::command]
+fn firewall_status() -> FirewallStatus {
+    #[cfg(windows)]
+    {
+        FirewallStatus { supported: true, allowed: firewall_rule_present() }
+    }
+    #[cfg(not(windows))]
+    {
+        FirewallStatus { supported: false, allowed: true }
+    }
+}
+
+/// Adds the inbound rule, prompting for administrator rights.
+///
+/// The rule is scoped to the port rather than to `lr-server.exe`. A program
+/// rule is tied to a full path, and the portable build runs from a USB stick:
+/// a rule granted while the stick was `E:` silently stops applying the first
+/// time it mounts as `F:`, which is exactly the confusing half-working state
+/// this is meant to end. `profile=any` is what covers the Public profile.
+#[tauri::command]
+fn allow_firewall() -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        // Delete first so a second run repairs a damaged rule rather than
+        // stacking duplicates. `&` rather than `&&`: the delete is expected to
+        // fail on a clean machine and must not stop the add.
+        let script = format!(
+            "Start-Process -FilePath cmd.exe -Verb RunAs -WindowStyle Hidden -Wait \
+             -ArgumentList '/c netsh advfirewall firewall delete rule name={rule} & \
+             netsh advfirewall firewall add rule name={rule} dir=in action=allow \
+             protocol=TCP localport={port} profile=any'",
+            rule = FIREWALL_RULE,
+            port = SERVER_PORT,
+        );
+        std::process::Command::new("powershell")
+            .args(["-NoProfile", "-NonInteractive", "-Command", &script])
+            .creation_flags(CREATE_NO_WINDOW)
+            .status()
+            .map_err(|err| format!("could not run PowerShell: {err}"))?;
+
+        // Trust the rule, not the exit code: a dismissed UAC prompt does not
+        // reliably surface as a failure through two layers of Start-Process.
+        if firewall_rule_present() {
+            Ok(())
+        } else {
+            Err("The firewall rule was not added — administrator approval is required.".into())
+        }
+    }
+    #[cfg(not(windows))]
+    {
+        Err("Firewall rules are only managed on Windows.".into())
     }
 }
 
@@ -452,6 +559,8 @@ pub fn run() {
             focus_launcher,
             hide_launcher,
             quit_app,
+            firewall_status,
+            allow_firewall,
         ])
         .manage(ServerProcess(Mutex::new(None)))
         .setup(|app| {

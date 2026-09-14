@@ -69,6 +69,22 @@ export const setClickThrough = (enabled: boolean) => invoke<void>('set_click_thr
 /** Full-interaction mode: the overlay stops ignoring cursor events entirely. */
 export const setInteractionMode = (on: boolean) => invoke<void>('set_interaction_mode', { on });
 
+/* ---------------- windows firewall ---------------- */
+
+export interface FirewallStatus {
+  /** False off Windows, and in a browser: there is nothing to warn about. */
+  supported: boolean;
+  /** An inbound allow rule for the server port is present. */
+  allowed: boolean;
+}
+
+/** Windows blocks inbound connections by default; see `src-tauri/src/lib.rs`. */
+export const firewallStatus = async (): Promise<FirewallStatus> =>
+  (await invoke<FirewallStatus>('firewall_status')) ?? { supported: false, allowed: true };
+
+/** Adds the inbound rule. Raises a UAC prompt; rejects if it is dismissed. */
+export const allowFirewall = () => invoke<void>('allow_firewall');
+
 /* ---------------- events from Rust ---------------- */
 
 export interface CursorPoint {

@@ -24,6 +24,24 @@ cpSync(join(release, 'lecture-react.exe'), join(output, 'Lecture React.exe'));
 cpSync(join(REPO, `apps/overlay/src-tauri/binaries/lr-server-${target}.exe`), join(output, 'lr-server.exe'));
 cpSync(join(REPO, 'apps/student/dist'), join(output, 'student'), { recursive: true });
 writeFileSync(join(output, 'portable.txt'), 'Store WebView2 settings in the adjacent Data folder.\r\n');
+// The app offers the same rule from the launcher, but a locked-down machine may
+// refuse the UAC prompt raised by a webview; this is the fallback an IT desk can
+// run directly. The rule is scoped to the port, not to the exe path, so it keeps
+// working when the USB drive mounts under a different letter.
+writeFileSync(join(output, 'Allow Firewall.cmd'), `@echo off
+REM Lets students reach Lecture React on this computer.
+REM Right-click this file and choose "Run as administrator".
+netsh advfirewall firewall delete rule name=Lecture-React-Server >nul 2>&1
+netsh advfirewall firewall add rule name=Lecture-React-Server dir=in action=allow protocol=TCP localport=8787 profile=any
+if errorlevel 1 (
+  echo.
+  echo Could not add the rule. Right-click this file and choose "Run as administrator".
+) else (
+  echo.
+  echo Done. Students on the same network can now open the QR link.
+)
+pause
+`.replaceAll('\n', '\r\n'));
 if (process.env.LR_WEBVIEW2_DIR) {
   const runtime = resolve(process.env.LR_WEBVIEW2_DIR);
   if (!existsSync(join(runtime, 'msedgewebview2.exe'))) throw new Error('LR_WEBVIEW2_DIR must contain an extracted x64 fixed WebView2 runtime');
@@ -33,9 +51,20 @@ writeFileSync(join(output, 'READ ME.txt'), `LECTURE REACT - WINDOWS USB EDITION
 
 1. Extract the entire folder onto a writable USB drive.
 2. Open Lecture React.exe. Keep lr-server.exe and student beside it.
-3. If Windows Firewall asks, allow access on your trusted classroom network.
+3. When Windows Firewall asks, tick BOTH Private and Public, then Allow access.
 4. Connect students to the same network and share the QR code or join link.
 5. Quit the app fully before safely ejecting the USB drive.
+
+IF STUDENTS SCAN THE QR AND THE PAGE WILL NOT LOAD
+The address is almost certainly right and Windows Firewall is dropping the
+connection: a school network counts as Public, where inbound traffic is blocked
+by default. The launcher shows an "Allow Students Through" button when the rule
+is missing. If that prompt is refused or unavailable, right-click
+"Allow Firewall.cmd" and choose "Run as administrator" instead.
+
+Still nothing? Some campus Wi-Fi isolates clients from each other, which blocks
+phone-to-laptop traffic no matter what the firewall says. A phone hotspot that
+the laptop and the students both join is the usual way around it.
 
 Requires x64 Windows 10/11 and Microsoft Edge WebView2 Runtime.
 If WebView2 is missing, install it from https://developer.microsoft.com/microsoft-edge/webview2/

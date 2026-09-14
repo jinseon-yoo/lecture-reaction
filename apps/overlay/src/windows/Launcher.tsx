@@ -2,7 +2,14 @@ import { useCallback, useEffect, useState } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faCopy, faQrcode, faCheck, faLink } from '@fortawesome/free-solid-svg-icons';
 import { useSession } from '../lib/SessionContext';
-import { hideLauncher, isDesktop, showOverlay } from '../lib/desktop';
+import {
+  allowFirewall,
+  firewallStatus,
+  hideLauncher,
+  isDesktop,
+  showOverlay,
+  type FirewallStatus,
+} from '../lib/desktop';
 import { fetchJoinBase, fetchSessionStatus, joinUrl } from '../lib/server';
 import { QrCanvas } from '../components/QrCanvas';
 
@@ -26,6 +33,9 @@ export function Launcher() {
   const [handedOff, setHandedOff] = useState(false);
   const [ended, setEnded] = useState(false);
   const [starting, setStarting] = useState(false);
+  const [firewall, setFirewall] = useState<FirewallStatus>({ supported: false, allowed: true });
+  const [fixingFirewall, setFixingFirewall] = useState(false);
+  const [firewallError, setFirewallError] = useState<string | null>(null);
 
   // The QR must encode an address a phone can reach, which is the server's LAN
   // address — not localhost. Falls back to VITE_SERVER_URL's origin.
@@ -61,6 +71,36 @@ export function Launcher() {
       window.removeEventListener('online', onOnline);
       document.removeEventListener('visibilitychange', onVisible);
     };
+  }, []);
+
+  // The QR can encode a perfectly correct address that no phone can open,
+  // because Windows drops inbound connections on a Public network profile —
+  // which is what a school Wi-Fi almost always is. Re-checked when the window
+  // is looked at again, so allowing the rule from Windows' own prompt (or from
+  // the button below) clears the notice without a restart.
+  useEffect(() => {
+    const check = () => void firewallStatus().then(setFirewall);
+    check();
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') check();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', check);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', check);
+    };
+  }, []);
+
+  const onAllowFirewall = useCallback(() => {
+    setFixingFirewall(true);
+    setFirewallError(null);
+    void allowFirewall()
+      .catch((err: unknown) => setFirewallError(String(err)))
+      .finally(() => {
+        setFixingFirewall(false);
+        void firewallStatus().then(setFirewall);
+      });
   }, []);
 
   // Handed off: no socket, so poll the server when this window comes back into
@@ -200,6 +240,28 @@ export function Launcher() {
             <button type="button" className="lr-btn lr-btn-ghost" onClick={() => setShowQr(false)}>
               Hide QR
             </button>
+          )}
+
+          {firewall.supported && !firewall.allowed && (
+            <div className="flex max-w-[300px] flex-col items-center gap-1.5">
+              <p className="lr-text text-center text-[10px] text-[var(--lr-muted)]">
+                Windows Firewall is blocking student connections. Scanning the QR will
+                time out until it is allowed.
+              </p>
+              <button
+                type="button"
+                className="lr-btn"
+                onClick={onAllowFirewall}
+                disabled={fixingFirewall}
+              >
+                {fixingFirewall ? 'Waiting for Windows…' : 'Allow Students Through'}
+              </button>
+              {firewallError && (
+                <p className="lr-text text-center text-[10px] text-[var(--lr-muted)]">
+                  {firewallError}
+                </p>
+              )}
+            </div>
           )}
 
           <p className="lr-pixel text-[10px] text-[var(--lr-muted)]">

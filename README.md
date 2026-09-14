@@ -27,8 +27,10 @@ has not been uploaded; maintainers can use the [release instructions](#publish-a
 2. Open **Lecture React.exe**. Keep `lr-server.exe`, `student/`, and
    `portable.txt` beside it.
 3. Connect the presentation computer and students to the same reachable network.
-   If Windows Firewall asks, allow the server on your trusted classroom network.
-4. Start a class and share its QR code or join link.
+   When Windows Firewall asks, tick **both Private and Public** and allow access.
+4. Start a class and share its QR code or join link. If students scan it and the
+   page will not load, see [Students scan the QR and nothing
+   loads](#students-scan-the-qr-and-nothing-loads).
 5. Quit the app before safely ejecting the USB drive.
 
 Requires **64-bit Windows 10/11** and
@@ -60,10 +62,12 @@ email provider rejects its size or executable contents.
 ## Download and run on macOS
 
 Open [GitHub Releases](https://github.com/jenna-studio/lecture-reaction/releases)
-and choose a release with `Lecture-React-macOS-Universal.zip` attached. It holds a
-single self-contained app: unzip it and drag **Lecture React.app** wherever you want it — Applications, the Desktop, an
-external drive. Nothing is installed, and no Node, pnpm, or Rust is needed on the
-presentation Mac.
+and pick the archive for your Mac: `Lecture-React-macOS-AppleSilicon.zip` for an
+M-series Mac, `Lecture-React-macOS-Intel.zip` for an Intel one. (Apple menu ->
+About This Mac tells you which.) Each holds a single self-contained app: unzip it
+and drag **Lecture React.app** wherever you want it — Applications, the Desktop,
+an external drive. Nothing is installed, and no Node, pnpm, or Rust is needed on
+the presentation Mac.
 
 1. Unzip the archive and move **Lecture React.app** where you want it.
 2. **Before the first open, clear the download flag.** The app is signed ad hoc and
@@ -251,13 +255,20 @@ and student web assets are generated before Tauri compiles and packages the app;
 no manual sidecar build is needed. `pnpm desktop` also prepares missing files on
 a fresh checkout.
 
-`pnpm build:macos:app` packages the movable macOS app described above: it builds
-both Mac architectures, joins the Rust binary and the server sidecar with `lipo`,
-signs the bundle ad hoc, and writes `dist/Lecture-React-macOS-Universal.zip`. The
-archive is made with `ditto` rather than `zip`, because only `ditto` preserves the
-bundle's symlinks and executable bits — a `.app` unpacked from a mangled archive
-will not launch. Building it needs both the `aarch64-apple-darwin` and
-`x86_64-apple-darwin` Rust targets installed.
+`pnpm build:macos:app` packages the movable macOS app described above. It builds
+**one app per architecture**, signs each bundle ad hoc, and writes
+`dist/Lecture-React-macOS-AppleSilicon.zip` and
+`dist/Lecture-React-macOS-Intel.zip`. Each archive is made with `ditto` rather
+than `zip`, because only `ditto` preserves the bundle's symlinks and executable
+bits — a `.app` unpacked from a mangled archive will not launch. Building them
+needs both the `aarch64-apple-darwin` and `x86_64-apple-darwin` Rust targets
+installed.
+
+Deliberately not a universal build. A universal app needs a universal sidecar,
+and the server sidecar is a Node SEA: roughly 110 MB thin and 220 MB fat. macOS
+never finishes validating a fat binary that size on a GUI launch out of
+`/Applications` — the app sits in dyld with no window, no server and no crash
+report. Thin sidecars launch fine, and each download is half the size.
 
 For standard installers, build on the destination operating system: macOS produces a `.app`/`.dmg`, Windows
 produces native Windows installers, and Linux produces Linux packages. Use matching
@@ -294,7 +305,9 @@ Build portability checks on 2026-09-08 (Apple Silicon macOS):
 - The generated standalone server started successfully and returned HTTP 200 for
   `/health` and the student page.
 
-Universal macOS app checks on 2026-09-12 (built on Apple Silicon):
+Universal macOS app checks on 2026-09-12 (built on Apple Silicon), kept for the
+record — the universal build was withdrawn on 2026-09-14 because the app hung at
+launch from `/Applications`, and is now one app per architecture:
 
 - `pnpm build:macos:app` produced `Lecture React.app` and its ZIP (81 MB).
 - Both the app binary and the bundled server report `x86_64 arm64`, and the ad-hoc
@@ -632,9 +645,11 @@ Keep that bundled runtime updated when rebuilding. See Microsoft's
 [WebView2 distribution guidance](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/distribution).
 
 Students must be on a reachable network, and Windows Firewall must permit the
-server's incoming connections. Managed PCs can block USB applications or network
-access. The executable is unsigned. Portability cannot guarantee execution on
-every computer; test the intended PC and PowerPoint presentation setup first.
+server's incoming connections — see [Students scan the QR and nothing
+loads](#students-scan-the-qr-and-nothing-loads). Managed PCs can block USB
+applications or network access. The executable is unsigned. Portability cannot
+guarantee execution on every computer; test the intended PC and PowerPoint
+presentation setup first.
 
 Build hosts need the standard project dependencies and Rust. On macOS/Linux,
 install `cargo-xwin` and the `x86_64-pc-windows-msvc` Rust target; this command
@@ -652,6 +667,41 @@ Portable build verification on 2026-09-08 (cross-built on Apple Silicon macOS):
 - This ZIP uses the installed WebView2 runtime; no fixed runtime is included.
 - Windows execution, USB-local storage behaviour, firewall access, and the
   PowerPoint overlay still need an actual Windows PC test.
+
+### Students scan the QR and nothing loads
+
+Almost always Windows Firewall rather than a bad address. Windows blocks inbound
+connections on the **Public** network profile by default, and a school or campus
+Wi-Fi is nearly always classified Public — so the server binds `0.0.0.0`, reports
+success, prints a correct LAN address into the QR code, and every phone that
+scans it times out. Nothing inside the app can observe this: the block happens
+before the connection reaches the process.
+
+Fix it one of three ways:
+
+- **In the app.** When the rule is missing, the launcher shows *Allow Students
+  Through* beneath the class code. It raises a UAC prompt and adds the rule.
+- **From the portable folder.** Right-click **Allow Firewall.cmd** and choose
+  *Run as administrator*. Use this when the in-app prompt is refused or the
+  machine is locked down.
+- **By hand**, in an administrator terminal:
+
+  ```powershell
+  netsh advfirewall firewall add rule name=Lecture-React-Server dir=in `
+    action=allow protocol=TCP localport=8787 profile=any
+  ```
+
+The rule is scoped to the **port**, not to `lr-server.exe`. A program rule is
+tied to a full path, and the portable build runs from a USB stick: a rule granted
+while the stick was `E:` silently stops applying the first time it mounts as
+`F:`. Scoping to the port is what makes the fix survive moving between rooms and
+machines.
+
+If the rule is in place and phones still cannot connect, the network itself is
+the problem. Many campus and guest Wi-Fi networks enable **client isolation**,
+which blocks phone-to-laptop traffic regardless of any firewall rule. A phone
+hotspot that the laptop and the students both join is the usual way around it.
+Check `LECTURE_LAN_IP` too if the address in the QR is not the adapter you expect.
 
 ## Publish a GitHub release without Actions
 
@@ -691,6 +741,8 @@ Run from a desktop folder or writable USB drive. No app installation, Node.js, o
 
 Requires 64-bit Windows 10/11 and Microsoft Edge WebView2 Runtime.
 Students need a reachable shared network and firewall permission for server connections.
+If a scanned QR code will not load, use "Allow Students Through" in the launcher, or
+right-click "Allow Firewall.cmd" and choose "Run as administrator".
 Settings use the adjacent Data folder. Active classes end when the app closes.
 
 This build is unsigned. Windows execution and PowerPoint overlay behavior still need testing.
