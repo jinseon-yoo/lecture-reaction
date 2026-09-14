@@ -198,15 +198,7 @@ export function Launcher() {
           </div>
 
           {showQr && joinBase && state.code ? (
-            <div className="flex flex-col items-center gap-2">
-              <QrCanvas value={joinUrl(joinBase)} />
-              {/* The address has to stay visible next to the QR: a phone that
-                  cannot scan can still type it, and when students cannot connect
-                  this is the first thing anyone needs to read out. */}
-              <p className="lr-text max-w-[300px] break-all text-center text-[11px]">
-                {shareUrl}
-              </p>
-            </div>
+            <QrCanvas value={joinUrl(joinBase)} />
           ) : (
             <div className="flex flex-col items-center gap-2">
               <div className="flex gap-2">
