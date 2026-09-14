@@ -21,11 +21,13 @@ export function professorSocketUrl(origin = serverOrigin()): string {
   return url.toString();
 }
 
-/** The URL a student types or scans. `?c=` prefills the join code. */
-export function joinUrl(base: string, code: string): string {
-  const url = new URL(base);
-  url.searchParams.set('c', code);
-  return url.toString();
+/**
+ * The URL a student types or scans. It deliberately carries no class code:
+ * the link gets them to the join form, and the code they type is what admits
+ * them. Anyone who can see the QR would otherwise be in without it.
+ */
+export function joinUrl(base: string): string {
+  return new URL(base).toString();
 }
 
 interface JoinUrlResponse {

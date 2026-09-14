@@ -184,7 +184,7 @@ export function Overlay() {
         onCustomPoll={(question, options) => startPoll('custom', question, options)}
         pollMinimized={Boolean(state.poll) && !pollExpanded}
         onExpandPoll={() => setPollExpanded(true)}
-        shareUrl={joinBase && state.code ? joinUrl(joinBase, state.code) : null}
+        shareUrl={joinBase && state.code ? joinUrl(joinBase) : null}
         surge={surge}
         onPopoverToggle={setPopoverOpen}
         onEndClass={onEndClass}

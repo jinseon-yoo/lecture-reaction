@@ -65,14 +65,22 @@ external drive. Nothing is installed, and no Node, pnpm, or Rust is needed on th
 presentation Mac.
 
 1. Unzip the archive and move **Lecture React.app** where you want it.
-2. **First open only:** right-click the app and choose **Open**, then click **Open**
-   in the warning dialog. The app is signed ad hoc, not notarized by Apple, so a
-   plain double-click is refused the first time. It works normally afterwards.
-3. If macOS says the app "is damaged and can't be opened", the download quarantined
-   it. Clear the flag and open it again:
-   `xattr -dr com.apple.quarantine "/path/to/Lecture React.app"`
+2. **Before the first open, clear the download flag.** The app is signed ad hoc and
+   is *not* notarized by Apple, so macOS blocks a downloaded copy — `spctl` rejects
+   it and the app never starts. In Terminal, type `xattr -dr com.apple.quarantine `
+   (with a trailing space), drag the app onto the window, and press Return. Then
+   open it normally. Once is enough; this is not needed on every launch.
+3. **Right-click → Open no longer works for this.** Apple removed that bypass in
+   macOS 15. If you already tried to open the app and macOS refused, use System
+   Settings → Privacy & Security → **Open Anyway**, near the bottom of the page.
 4. Allow incoming connections when macOS asks — students connect to this Mac.
-5. Start a class and share its QR code or join link.
+5. Start a class and share its QR code or join link. Students scan it and then type
+   the class code; the link by itself does not admit anyone.
+
+The only way to make a plain double-click work for everyone is to sign with a
+**Developer ID Application** certificate and notarize the app with Apple. That needs
+a paid Apple Developer account; an *Apple Distribution* certificate is for the App
+Store and will not do it.
 
 Runs on Apple Silicon and Intel Macs; both architectures are in the one app.
 Settings live in your home folder rather than inside the bundle, so copying the app
@@ -296,6 +304,19 @@ Universal macOS app checks on 2026-09-12 (built on Apple Silicon):
 - The Intel half has not been run on an actual Intel Mac; only its architecture,
   signature and packaging are checked.
 
+Join-gate and Gatekeeper checks on 2026-09-14 (v1.0.1, Apple Silicon, macOS 27):
+
+- Driven through Chromium against the **packaged** `.app`, not a dev server, with a
+  real class created over the professor websocket. Five checks passed: a `?c=` link
+  does not enter the room, the code is not prefilled from it, the query is stripped
+  from the address bar, a wrong code is refused with an inline error, and the
+  correct typed code enters the room.
+- The v1.0.0 macOS download was confirmed **blocked by Gatekeeper**, not broken:
+  with a download's quarantine flag attached, `spctl` returns `rejected` and the app
+  never launches. Clearing the flag with `xattr -dr com.apple.quarantine` *before*
+  the first open makes the same bundle launch and serve normally. Clearing it after
+  a blocked attempt did not reliably recover in testing, so the order matters.
+
 These checks do not establish Windows/Linux runtime support or a complete desktop
 class session. The Windows/Linux cases in the tooling tests simulate platform
 selection; they do not run native Windows/Linux builds.
@@ -304,7 +325,7 @@ Earlier recorded checks on macOS (Node 25, pnpm 10): install, typecheck across a
 bundles building, the Tauri shell compiling and **launching**, the server smoke test
 against a live 30-student session, the standalone server binary serving with no Node
 in the environment, and the student app driven end to end on phone and desktop
-viewports (auto-join from a QR link, react, ask, upvote, see a question resolved,
+viewports (join from a QR link, react, ask, upvote, see a question resolved,
 watch a surge fire on the overlay). Port resolution was verified against a real
 clash: with another project's vite on `[::1]:5174`, `pnpm desktop` stepped to 5175,
 the Tauri webview served Lecture React, and the other project was left untouched.
@@ -372,14 +393,15 @@ quietly ruin a class if it is wrong.
    Every class gets a new one, and the previous code dies the moment its class ends.
 2. Share it, whichever way suits the room:
    - **Show QR** on the projector — the fastest way to get a hall full of phones in.
-   - **Copy Link** puts `http://<address>:8787/?c=K7M4P` on your clipboard, to paste
+   - **Copy Link** puts `http://<address>:8787/` on your clipboard, to paste
      into the LMS, a chat, or an email. Best for students on laptops.
    - **Copy Code** copies just the five characters, if you are sharing the address
      some other way.
 
-   All three carry the code, so students land already joined rather than on a form.
-   The address is re-checked continuously, so the link and the QR stay correct even
-   if you join the room's Wi-Fi after starting the app.
+   The QR code and the link only carry students to the join form — neither contains
+   the class code. Students type the code to get in, so keep it on screen while the
+   room fills. The address is re-checked continuously, so the link and the QR stay
+   correct even if you join the room's Wi-Fi after starting the app.
 3. Watch `N students joined` climb. When the room is in, click **Start Overlay**.
    The launcher gets out of the way and the transparent overlay takes over.
 
@@ -468,12 +490,12 @@ Students open the server's address on a phone or a laptop — any device, any OS
 browser. No app, no account, no name. The server binds all interfaces, so anything on
 the same network can reach it.
 
-Three ways to hand it out, all carrying the code so nobody lands on an empty form:
+Three ways to hand it out. The QR and the link reach the join form; the code is what admits them:
 
 | | Best for |
 | --- | --- |
-| **Show QR** | A hall full of phones. Put it on the projector; students scan and are in. |
-| **Copy Link** | Laptops. Pastes `http://<address>:8787/?c=K7M4P` into your LMS, a chat or an email. |
+| **Show QR** | A hall full of phones. Put it on the projector; students scan, then type the code. |
+| **Copy Link** | Laptops. Pastes `http://<address>:8787/` into your LMS, a chat or an email. |
 | **Copy Code** | When you are sharing the address some other way. |
 
 All three live in the launcher, and Copy Link / Show QR are also in the overlay's gear

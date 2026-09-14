@@ -97,7 +97,7 @@ export function Launcher() {
   }, []);
 
   /** The full invite: address + code, so a student needs only to click it. */
-  const shareUrl = joinBase && state.code ? joinUrl(joinBase, state.code) : null;
+  const shareUrl = joinBase && state.code ? joinUrl(joinBase) : null;
 
   const onStartOverlay = useCallback(() => {
     if (isDesktop()) {
@@ -158,7 +158,7 @@ export function Launcher() {
           </div>
 
           {showQr && joinBase && state.code ? (
-            <QrCanvas value={joinUrl(joinBase, state.code)} />
+            <QrCanvas value={joinUrl(joinBase)} />
           ) : (
             <div className="flex flex-col items-center gap-2">
               <div className="flex gap-2">

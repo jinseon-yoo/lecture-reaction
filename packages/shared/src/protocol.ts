@@ -209,8 +209,8 @@ export const LIMITS = {
   /** A resolved question lingers this long before it is dropped. */
   resolveFadeMs: 600,
   /** Floating reaction lifetime on the overlay. */
-  reactionFloatMinMs: 2200,
-  reactionFloatMaxMs: 4000,
+  reactionFloatMinMs: 3000,
+  reactionFloatMaxMs: 5000,
   /** Poll results stay expanded this long, then minimize. */
   pollResultVisibleMs: 20000,
   /**

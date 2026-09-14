@@ -52,14 +52,20 @@ writeFileSync(join(output, 'READ ME.txt'), `LECTURE REACT - MACOS EDITION
 
 1. Drag "Lecture React.app" anywhere you like: Applications, the Desktop,
    an external drive. It is one self-contained app with nothing to install.
-2. The first open needs a detour, because this app is not notarized by Apple:
-   right-click the app, choose Open, then click Open in the dialog.
-   Double-clicking works normally from then on.
-3. If macOS says the app "is damaged and can't be opened", it was quarantined
-   by the download. Clear it in Terminal, then open it again:
-      xattr -dr com.apple.quarantine "/path/to/Lecture React.app"
-4. Allow incoming connections when macOS asks. Students need to reach this Mac.
-5. Connect students to the same network and share the QR code or join link.
+2. BEFORE opening it the first time, clear the download flag. This app is not
+   notarized by Apple, so macOS blocks a downloaded copy outright. Open
+   Terminal, type the following, drag the app onto the window, press Return:
+      xattr -dr com.apple.quarantine
+   (the command ends with a space, then the dragged-in path). Then open the app
+   normally. This is needed once, not every launch.
+   On macOS 15 and later, right-clicking the app and choosing Open NO LONGER
+   bypasses this. If you already tried to open it and macOS refused, you can
+   instead go to System Settings > Privacy & Security, find the message about
+   Lecture React near the bottom, and click Open Anyway.
+3. Allow incoming connections when macOS asks. Students need to reach this Mac.
+4. Connect students to the same network and share the QR code or join link.
+5. Students scan the QR code, then type the class code shown on your screen.
+   The link alone does not let anyone in.
 
 Runs on both Apple Silicon and Intel Macs. The app declares macOS 10.13 as
 its minimum, but only current macOS has been tested.
