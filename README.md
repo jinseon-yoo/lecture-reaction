@@ -9,7 +9,8 @@ browser, an IDE — anything. Students open a URL on their phone/ipad/laptop, ty
 and tap: *understand*, *confused*, *too fast*, *again*, *interesting*, *love it* — plus
 *can't see* and *can't hear* for when the projector washes out or the mic is off. Reactions
 float up over the slides. Questions stack as compact bubbles down the right edge, sorted by
-votes; the professor clears them with a checkmark and can fire a one-click understanding check.
+votes; the professor clears them with a checkmark and can fire a one-click understanding check,
+then blow the result up in the middle of the screen for the whole room to read.
 
 No student install. No login on either side. No dashboard — the overlay **is** the professor
 interface, and nobody ever looks away from the slides.
@@ -317,6 +318,13 @@ Join-gate and Gatekeeper checks on 2026-09-14 (v1.0.1, Apple Silicon, macOS 27):
   the first open makes the same bundle launch and serve normally. Clearing it after
   a blocked attempt did not reliably recover in testing, so the order matters.
 
+Overlay checks on 2026-09-14 (v1.0.1, Chromium against the overlay window):
+
+- A real class was started from the launcher, 14 simulated students joined and
+  answered an understanding check, and the tally rendered (71/21/7, n=14).
+- The results panel expanded to the centre of the screen at projector size and
+  collapsed back to the corner, with the bars keeping their values across both.
+
 These checks do not establish Windows/Linux runtime support or a complete desktop
 class session. The Windows/Linux cases in the tooling tests simulate platform
 selection; they do not run native Windows/Linux builds.
@@ -433,6 +441,7 @@ your clicker and your IDE all behave as if it were not running.
 | Answer a question | Read the cards down the right edge — newest at the bottom, most-upvoted highlighted. Click the checkmark when you have answered it; the card fades and slides away, and the student who asked sees `Answered`. |
 | Ask if they are following | Click **? Ask Class**. Every phone gets *Got it / Almost / Lost*, and the tally appears on your overlay within a second. It stays up for 20 seconds, then minimizes itself. |
 | Ask something specific | Alt-click (or long-press) **? Ask Class** for a quick poll composer: a question and 2-4 options. It is deliberately small — this is not a survey tool. |
+| Show the result to the room | Click the **expand** arrows in the results panel's top-right corner. The tally pops out to the middle of the screen at projector size, so the back row can read it off the wall. Click the same button to send it back to the corner. While it is expanded it will not auto-minimize — it stays until you put it away. |
 | Know when something is wrong | Watch for the control strip to highlight with a named badge (`? Confused`, `Can't Hear`). It fires when a reaction reaches ~30% of the class, so you catch a spike peripherally instead of watching floaters while you talk. |
 | Hide reactions for a moment | Click **Reactions**, or press `CmdOrCtrl+Shift+H`. Reactions keep being collected and counted, they just stop moving on screen. Useful during a video, a demo, or an exam. `Can't See` / `Can't Hear` still show through — hiding a fault report would defeat the point. |
 | Let a latecomer in | Open the gear menu: **Copy Link** and **Show QR** are there too, so you never have to dig the launcher back out mid-lecture. |

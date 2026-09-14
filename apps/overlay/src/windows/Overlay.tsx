@@ -28,6 +28,8 @@ export function Overlay() {
   const [settings, setSettings] = useState<OverlaySettings>(loadSettings);
   const [fullInteraction, setFullInteraction] = useState(false);
   const [pollExpanded, setPollExpanded] = useState(true);
+  /** Results popped out to the middle of the screen for the whole room to read. */
+  const [pollPresenting, setPollPresenting] = useState(false);
   // True while a control-strip popover is open; the poll panel lifts clear of it.
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [joinBase, setJoinBase] = useState<string | null>(null);
@@ -110,11 +112,18 @@ export function Overlay() {
   useEffect(() => {
     if (!pollId) return;
     setPollExpanded(true);
+    setPollPresenting(false); // a new poll starts in the corner, not on the wall
+  }, [pollId]);
+
+  useEffect(() => {
+    if (!pollId || !pollExpanded) return;
     // After a while the panel gets out of the way on its own; the professor
-    // can bring it back from the strip.
+    // can bring it back from the strip. Deliberately showing the results to
+    // the room outranks that: nothing yanks them off the wall mid-sentence.
+    if (pollPresenting) return;
     const timer = window.setTimeout(() => setPollExpanded(false), LIMITS.pollResultVisibleMs);
     return () => window.clearTimeout(timer);
-  }, [pollId]);
+  }, [pollId, pollExpanded, pollPresenting]);
 
   /*
    * Surge nudge.
@@ -166,9 +175,12 @@ export function Overlay() {
         <PollPanel
           results={state.poll}
           raised={popoverOpen}
+          presenting={pollPresenting}
+          onTogglePresent={() => setPollPresenting((on) => !on)}
           onMinimize={() => setPollExpanded(false)}
           onClose={() => {
             setPollExpanded(false);
+            setPollPresenting(false);
             endPoll();
           }}
         />

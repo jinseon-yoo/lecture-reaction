@@ -93,6 +93,16 @@ html.lr-role-overlay #root {
   overflow: hidden;
 }
 
+/* Projector size: the same bar, readable from the back row when the results
+   are popped out to the middle of the screen. */
+.lr-bar-track-lg {
+  height: 34px;
+  border-width: 3px;
+  background:
+    repeating-linear-gradient(to right, transparent 0 26px, color-mix(in srgb, var(--lr-dark) 18%, transparent) 26px 30px),
+    color-mix(in srgb, var(--lr-dark) 8%, transparent);
+}
+
 .lr-bar-fill {
   height: 100%;
   background: var(--lr-bar-accent, var(--lr-mint));

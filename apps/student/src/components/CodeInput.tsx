@@ -26,7 +26,9 @@ export function CodeInput({ value, onChange, onSubmit, disabled }: Props) {
           return (
             <span
               key={i}
-              className={`flex h-16 w-12 items-center justify-center border-2 bg-lr-surface font-pixel text-[26px] text-lr-dark ${
+              // `lr-mono` is the same face the professor's screen shows the code
+              // in, so what a student types matches what they are copying.
+              className={`flex h-16 w-12 items-center justify-center border-2 bg-lr-surface lr-mono text-[26px] text-lr-dark ${
                 isCaret ? 'border-lr-dark shadow-[0_0_0_2px_var(--lr-lavender)]' : 'border-lr-dark'
               }`}
             >
