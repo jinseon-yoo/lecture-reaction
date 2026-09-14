@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!--
+    Notarization requires the hardened runtime, which forbids JIT by default.
+    Both halves of this app need it: WKWebView compiles JavaScript, and the
+    bundled server is a Node single-executable, so V8 maps executable pages.
+    Without these the app launches and then dies the moment either runs code.
+  -->
+  <key>com.apple.security.cs.allow-jit</key>
+  <true/>
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+  <true/>
+  <!-- The app spawns lr-server, a separately signed executable beside it. -->
+  <key>com.apple.security.cs.disable-library-validation</key>
+  <true/>
+</dict>
+</plist>

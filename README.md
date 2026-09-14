@@ -685,14 +685,27 @@ Portable build verification on 2026-09-08 (cross-built on Apple Silicon macOS):
 
 ### Students scan the QR and nothing loads
 
-Almost always Windows Firewall rather than a bad address. Windows blocks inbound
-connections on the **Public** network profile by default, and a school or campus
-Wi-Fi is nearly always classified Public — so the server binds `0.0.0.0`, reports
-success, prints a correct LAN address into the QR code, and every phone that
-scans it times out. Nothing inside the app can observe this: the block happens
-before the connection reaches the process.
+First check the network address, then the firewall. A QR code can decode
+correctly while its destination is unreachable from a phone.
 
-Fix it one of three ways:
+- **Physical Windows PC:** connect the PC and phone to the same reachable Wi-Fi
+  or LAN. Open the copied join link on the phone as well as scanning the QR.
+- **Windows inside Parallels:** Shared networking gives Windows a private VM
+  address, commonly `10.211.55.3`. The Mac can reach it, but phones on the real
+  Wi-Fi normally cannot. In Parallels, select **Devices > Network > Bridged
+  Network > Wi-Fi** (or the Ethernet adapter connected to the students' network).
+  Wait for Windows to obtain a new address. The app refreshes its join address
+  every 10 seconds; reopen the app if an older build keeps the previous address.
+  Scan the newly displayed QR. Do not substitute the Mac's IP: the server runs
+  inside Windows. See [Parallels network modes](https://kb.parallels.com/en/4948).
+
+Both environments use the same app and automatic address selection. Bridging
+is a VM setting, not a requirement for a physical PC. Networks that disallow
+bridging or communication between devices need a different reachable network.
+
+Windows Firewall can also block inbound connections on the **Public** profile,
+including classroom Wi-Fi. A locally working page does not prove phones can
+reach the server. Allow the server through the firewall in one of three ways:
 
 - **In the app.** When the rule is missing, the launcher shows *Allow Students
   Through* beneath the class code. It raises a UAC prompt and adds the rule.

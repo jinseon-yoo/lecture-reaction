@@ -56,9 +56,15 @@ writeFileSync(join(output, 'READ ME.txt'), `LECTURE REACT - WINDOWS USB EDITION
 5. Quit the app fully before safely ejecting the USB drive.
 
 IF STUDENTS SCAN THE QR AND THE PAGE WILL NOT LOAD
-The address is almost certainly right and Windows Firewall is dropping the
-connection: a school network counts as Public, where inbound traffic is blocked
-by default. The launcher shows an "Allow Students Through" button when the rule
+If Windows runs inside Parallels, Shared networking gives it a private VM
+address (often 10.211.55.3) that phones cannot normally reach. In Parallels choose
+Devices > Network > Bridged Network > Wi-Fi (or your connected Ethernet adapter).
+Wait for Windows to get a new address, then scan the refreshed QR. The app
+refreshes the address every 10 seconds; reopen older builds if needed.
+On a physical Windows PC, connect the PC and phones to the same reachable LAN.
+
+Windows Firewall may also drop incoming connections, especially on a Public
+network profile. The launcher shows an "Allow Students Through" button when the rule
 is missing. If that prompt is refused or unavailable, right-click
 "Allow Firewall.cmd" and choose "Run as administrator" instead.
 

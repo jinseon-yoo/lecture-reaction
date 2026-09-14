@@ -4,6 +4,23 @@ import { join } from 'node:path';
 import { REPO, pnpmCommand } from './platform.mjs';
 
 /*
+ * Signing.
+ *
+ * Ad-hoc by default, which is enough to run locally but NOT enough to download:
+ * macOS quarantines anything from a browser and refuses to launch an unnotarized
+ * app, so every user has to clear the flag by hand.
+ *
+ * Set both of these and the build signs with your Developer ID and notarizes
+ * with Apple instead, which makes a plain double-click work for everyone:
+ *
+ *   LR_MACOS_IDENTITY="Developer ID Application: NAME (TEAMID)"
+ *   LR_NOTARY_PROFILE="lecture-react"   # xcrun notarytool store-credentials
+ */
+const identity = process.env.LR_MACOS_IDENTITY?.trim();
+const notaryProfile = process.env.LR_NOTARY_PROFILE?.trim();
+const entitlements = join(REPO, 'apps/overlay/src-tauri/entitlements.plist');
+
+/*
  * One app per architecture, deliberately not a universal build.
  *
  * A universal app needs a universal sidecar, and the server sidecar is a Node
@@ -45,10 +62,26 @@ for (const target of TARGETS) {
   cpSync(source, join(output, app), { recursive: true, verbatimSymlinks: true });
 
   const bundled = join(output, app);
-  // An arm64 Mac refuses to launch code that is not signed at all, and Tauri
-  // leaves the bundle unsigned. Ad-hoc is enough to run; it is not notarized.
   run('xattr', ['-cr', bundled], env);
-  run('codesign', ['--force', '--deep', '--sign', '-', bundled], env);
+  if (identity) {
+    // Nested code first, then the bundle: signing the outer app seals whatever
+    // the inner binaries look like at that moment, so re-signing lr-server
+    // afterwards would invalidate the app's own signature.
+    const sign = (target) => run('codesign', [
+      '--force', '--timestamp',
+      '--options', 'runtime',
+      '--entitlements', entitlements,
+      '--sign', identity,
+      target,
+    ], env);
+    sign(join(bundled, 'Contents/MacOS/lr-server'));
+    sign(bundled);
+  } else {
+    // An arm64 Mac refuses to launch code that is not signed at all, and Tauri
+    // leaves the bundle unsigned. Ad-hoc is enough to run from this machine; a
+    // downloaded copy still has to have its quarantine flag cleared by hand.
+    run('codesign', ['--force', '--deep', '--sign', '-', bundled], env);
+  }
   run('codesign', ['--verify', '--deep', '--strict', bundled], env);
 
   const executable = execFileSync('/usr/libexec/PlistBuddy',
@@ -93,6 +126,25 @@ Settings live in your home folder, not inside the app, so copying the app to
 another Mac starts it fresh. Live classes and questions are held in memory and
 end when the app closes.
 `);
+
+  if (identity && notaryProfile) {
+    // Apple wants the bundle in a container to inspect; the ticket is then
+    // stapled INTO the .app, so the shipped archive must be built afterwards.
+    const upload = join(REPO, 'dist', `${target.name}-notarize.zip`);
+    rmSync(upload, { force: true });
+    run('ditto', ['-c', '-k', '--sequesterRsrc', '--keepParent', bundled, upload], env);
+    console.log('   submitting to Apple for notarization (this takes a few minutes)…');
+    run('xcrun', ['notarytool', 'submit', upload,
+      '--keychain-profile', notaryProfile, '--wait'], env);
+    run('xcrun', ['stapler', 'staple', bundled], env);
+    rmSync(upload, { force: true });
+    // The real test: what Gatekeeper says about a downloaded copy.
+    run('spctl', ['-a', '-vv', bundled], env);
+  } else {
+    console.log(identity
+      ? '   signed with Developer ID but NOT notarized (set LR_NOTARY_PROFILE)'
+      : '   ad-hoc signed: downloads need their quarantine flag cleared by hand');
+  }
 
   const zip = join(REPO, 'dist', `${target.name}.zip`);
   rmSync(zip, { force: true });
