@@ -11,8 +11,9 @@
  * The output is named for Tauri's sidecar convention:
  *   binaries/lr-server-<rust target triple>
  *
- * `LR_BUILD_TARGET=universal-apple-darwin` builds both macOS architectures and
- * joins them with `lipo`, so one `.app` runs on Apple Silicon and Intel.
+ * `LR_BUILD_TARGET` picks the target: either macOS architecture builds from
+ * either Mac. Deliberately never a `lipo`'d universal binary — a ~220 MB fat
+ * sidecar makes the packaged app hang forever at launch from /Applications.
  */
 
 import { execFileSync } from 'node:child_process';
@@ -84,15 +85,23 @@ async function officialNode(platform = process.platform, architecture = process.
 
 const host = targetTriple();
 const triple = process.env.LR_BUILD_TARGET || process.env.TAURI_ENV_TARGET_TRIPLE || host;
-const universal = triple === 'universal-apple-darwin';
-const crossWindows = triple === 'x86_64-pc-windows-msvc' && host !== triple;
-if (universal && !host.endsWith('-apple-darwin')) {
-  throw new Error('A universal macOS sidecar can only be built on macOS.');
+if (triple === 'universal-apple-darwin') {
+  // A fat sidecar is roughly 220 MB, and macOS never finishes validating it on
+  // a GUI launch from /Applications: the app hangs in dyld with no window and
+  // no crash. Ship one app per architecture instead.
+  throw new Error('Universal macOS sidecars are not supported; build each architecture separately.');
 }
-if (!universal && triple !== host && !crossWindows) throw new Error(`Unsupported cross-build target: ${triple}`);
+const crossWindows = triple === 'x86_64-pc-windows-msvc' && host !== triple;
+// The SEA blob is not architecture-locked, so either Mac can build either
+// macOS sidecar: the blob simply drops into the matching official node.
+const crossDarwin =
+  triple.endsWith('-apple-darwin') && host.endsWith('-apple-darwin') && triple !== host;
+if (triple !== host && !crossWindows && !crossDarwin) {
+  throw new Error(`Unsupported cross-build target: ${triple}`);
+}
 const expectedArch = process.arch === 'arm64' ? 'aarch64' : 'x86_64';
 if (!host.startsWith(`${expectedArch}-`)) throw new Error('Node and the Rust host must use the same architecture.');
-const macho = universal || (process.platform === 'darwin' && !crossWindows);
+const macho = triple.endsWith('-apple-darwin');
 const extension = triple.includes('windows') ? '.exe' : '';
 const outFile = join(OUT_DIR, `lr-server-${triple}${extension}`);
 
@@ -160,21 +169,12 @@ const sign = (file) => { if (macho) run('codesign', ['--force', '--sign', '-', f
 
 console.log('[3/4] injecting into a copy of the node binary');
 rmSync(outFile, { force: true });
-if (universal) {
-  // Tauri compiles each architecture separately and expects a sidecar named for
-  // each one, so both thin builds ship alongside the combined binary.
-  const slices = [];
-  for (const [arch, slice] of [['arm64', 'aarch64-apple-darwin'], ['x64', 'x86_64-apple-darwin']]) {
-    const thin = join(OUT_DIR, `lr-server-${slice}`);
-    inject(await officialNode('darwin', arch), thin);
-    sign(thin);
-    slices.push(thin);
-  }
-  run('lipo', ['-create', ...slices, '-output', outFile]);
-  chmodSync(outFile, 0o755);
-} else {
-  inject(crossWindows ? await officialNode('win32', 'x64') : baseNode, outFile);
-}
+const source = crossWindows
+  ? await officialNode('win32', 'x64')
+  : macho
+    ? await officialNode('darwin', triple.startsWith('aarch64') ? 'arm64' : 'x64')
+    : baseNode;
+inject(source, outFile);
 sign(outFile);
 
 rmSync(WORK, { recursive: true, force: true });
