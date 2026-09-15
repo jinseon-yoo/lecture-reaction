@@ -115,6 +115,59 @@ WebSocket endpoint, so the URL the server prints on boot (`http://<lan-ip>:8787`
 page and the socket origin. No app store, no login, no permissions prompt. The professor reads
 the code off the overlay; students type it into a page reachable on the room's network.
 
+### Two ways in: the LAN, or an outbound tunnel
+
+The topology above assumes a phone can open a socket to the professor's machine. On a
+lot of campuses it cannot: the lectern is wired into a staff VLAN, the students are on a
+guest SSID, and the two are routed apart on purpose. No firewall rule on the laptop
+changes that — there is no path between the two networks at all — so `lan.ts` can pick
+a perfectly correct address that is unreachable from every seat in the room.
+
+The fix is to stop asking for an inbound path. `packages/server/src/tunnel.ts` drives a
+bundled `cloudflared` client that dials **out** from the professor's machine to
+Cloudflare's edge and holds the connection open; students reach a public
+`https://<random>.trycloudflare.com` hostname that is proxied back down it.
+
+```
+   PROFESSOR MACHINE (staff Ethernet)              STUDENT PHONES (guest Wi-Fi)
+ +----------------------------------+           +-----------------------------+
+ |  apps/overlay                    |           |  apps/student               |
+ |     | ws://127.0.0.1:8787        |           |     | wss://<random>        |
+ |     v  role=professor            |           |     v   .trycloudflare.com  |
+ |  packages/server  (unchanged)    |           +-------------+---------------+
+ |     ^  http://127.0.0.1:8787     |                         |
+ |     |                            |                         |  outbound only
+ |  cloudflared  --url 127.0.0.1    |                         v
+ |     |  outbound only             |               +-------------------+
+ +-----+----------------------------+               |  Cloudflare edge  |
+       +------------------------------------------->|  (no state held)  |
+                                                    +-------------------+
+```
+
+The server is the same process either way; the tunnel moves bytes, not the source of
+truth. Sessions, questions and poll answers still live in memory on the professor's
+machine. Nothing in the hub or the protocol knows the tunnel exists — the only places
+that do are:
+
+- `index.ts`, which reports the tunnel's state alongside the LAN address in
+  `/api/join-url`, exposes `POST`/`DELETE /api/tunnel`, and refuses the professor's
+  control surface (`/api/join-url`, `/api/tunnel`, `role=professor` upgrades) to any
+  request carrying Cloudflare's proxy headers. Loopback is not the test it looks like:
+  `cloudflared` runs on the same machine and proxies to `127.0.0.1`, so a student on
+  the far side of the world arrives with the overlay's `remoteAddress`. `cf-ray` /
+  `cf-connecting-ip` are what separate them, and nothing on the LAN path sets those.
+- The launcher, which offers **Students On Another Network** and, once the tunnel is
+  up, hands out the public address everywhere a LAN address was handed out before.
+
+Why this and not a hosted relay: a relay means a VPS, a domain, TLS renewal and someone
+paying for it every month, for a tool whose entire pitch is "no account, no cloud".
+Quick tunnels are free and unauthenticated. The costs are the honest ones: the hostname
+is random per start, there is no SLA, reactions add a Cloudflare round-trip (tens of
+milliseconds, not the LAN's single digits), and question text transits Cloudflare. That
+is why it is a fallback the professor turns on, not the default. The student app needs
+no change at all — the public origin is `https:`, so `resolveSocketUrl()` picks `wss:`
+from `window.location` as it always has.
+
 ### Single source of truth
 
 The server owns every id (`sessionId`, question ids, poll ids, poll option ids, burst ids) and
@@ -1036,8 +1089,10 @@ overlay in one glance and one click.
   all) need testing, and Wayland may need a different strategy entirely — likely an input region
   set from the same rect registry rather than a whole-window toggle.
 - **Hosted deployment.** A one-command deploy of `packages/server` for departments that would
-  rather not run it on a laptop, with a stable URL and a QR code. This trades away the LAN-latency
-  argument in §1, so it should be an option, not the default.
+  rather not run it on a laptop, with a stable URL and a QR code. The outbound tunnel in §1
+  already covers the split-network case for free; this is the step beyond it for a department
+  that wants a *stable* address and is willing to pay for a host. It trades away the LAN-latency
+  argument, so it should be an option, not the default.
 - **Reconnect hardening.** The professor resume token currently dies with the process; persisting
   it (with the store) would let a crashed overlay rejoin a class that is still running.
 - **Accessibility pass on the student app.** The reaction pad is the piece most people touch;

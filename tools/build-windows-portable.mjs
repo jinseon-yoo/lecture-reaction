@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { cpSync, mkdirSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { REPO, pnpmCommand } from './platform.mjs';
+import { stageCloudflaredSidecar } from './fetch-cloudflared.mjs';
 
 const target = 'x86_64-pc-windows-msvc';
 const env = { ...process.env, LR_BUILD_TARGET: target };
@@ -11,6 +12,7 @@ if (!['win32', 'darwin', 'linux'].includes(process.platform)) throw new Error('U
 pnpm(['-F', '@lr/student', 'build']);
 pnpm(['-F', '@lr/overlay', 'build']);
 run(process.execPath, [join(REPO, 'tools/build-server-binary.mjs')]);
+await stageCloudflaredSidecar(target);
 // Preparation above deliberately targets Windows, including when building on macOS.
 pnpm(['tauri', 'build', '--target', target, '--no-bundle',
   ...(process.platform === 'win32' ? [] : ['--runner', 'cargo-xwin']),
@@ -22,6 +24,8 @@ rmSync(output, { recursive: true, force: true });
 mkdirSync(output, { recursive: true });
 cpSync(join(release, 'lecture-react.exe'), join(output, 'Lecture React.exe'));
 cpSync(join(REPO, `apps/overlay/src-tauri/binaries/lr-server-${target}.exe`), join(output, 'lr-server.exe'));
+// Beside lr-server.exe, which is where the server looks for it first.
+cpSync(join(REPO, `apps/overlay/src-tauri/binaries/cloudflared-${target}.exe`), join(output, 'cloudflared.exe'));
 cpSync(join(REPO, 'apps/student/dist'), join(output, 'student'), { recursive: true });
 writeFileSync(join(output, 'portable.txt'), 'Store WebView2 settings in the adjacent Data folder.\r\n');
 // The app offers the same rule from the launcher, but a locked-down machine may
@@ -50,9 +54,13 @@ if (process.env.LR_WEBVIEW2_DIR) {
 writeFileSync(join(output, 'READ ME.txt'), `LECTURE REACT - WINDOWS USB EDITION
 
 1. Extract the entire folder onto a writable USB drive.
-2. Open Lecture React.exe. Keep lr-server.exe and student beside it.
+2. Open Lecture React.exe. Keep lr-server.exe, cloudflared.exe and student beside it.
 3. When Windows Firewall asks, tick BOTH Private and Public, then Allow access.
 4. Connect students to the same network and share the QR code or join link.
+   If the PC is on the school's wired network and students are on a Wi-Fi that
+   cannot reach it, press "Students On Another Network" in the launcher: the
+   QR code switches to an internet address that works from any network, as
+   long as both the PC and the phones have internet access.
 5. Quit the app fully before safely ejecting the USB drive.
 
 IF STUDENTS SCAN THE QR AND THE PAGE WILL NOT LOAD
@@ -68,9 +76,12 @@ network profile. The launcher shows an "Allow Students Through" button when the 
 is missing. If that prompt is refused or unavailable, right-click
 "Allow Firewall.cmd" and choose "Run as administrator" instead.
 
-Still nothing? Some campus Wi-Fi isolates clients from each other, which blocks
-phone-to-laptop traffic no matter what the firewall says. A phone hotspot that
-the laptop and the students both join is the usual way around it.
+Still nothing? Some campus networks keep the lectern's Ethernet and the student
+Wi-Fi apart on purpose, which blocks phone-to-laptop traffic no matter what the
+firewall says. Press "Students On Another Network" in the launcher. It opens an
+outbound connection from this PC to the internet and gives students a public
+https address instead, so nothing has to reach the PC directly. It needs
+internet access on both sides and takes a few seconds to come up.
 
 Requires x64 Windows 10/11 and Microsoft Edge WebView2 Runtime.
 If WebView2 is missing, install it from https://developer.microsoft.com/microsoft-edge/webview2/

@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { cpSync, mkdirSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { REPO, pnpmCommand } from './platform.mjs';
+import { stageCloudflaredSidecar } from './fetch-cloudflared.mjs';
 
 /*
  * Signing.
@@ -49,6 +50,7 @@ for (const target of TARGETS) {
   console.log(`\n=== ${target.label} (${target.triple}) ===`);
   const env = { ...process.env, LR_BUILD_TARGET: target.triple };
   run(process.execPath, [join(REPO, 'tools/build-server-binary.mjs')], env);
+  await stageCloudflaredSidecar(target.triple);
   // The web assets are built once above, so Tauri's own beforeBuildCommand would
   // only repeat the work — and would rebuild the sidecar for the wrong arch.
   pnpm(['tauri', 'build', '--target', target.triple, '--bundles', 'app',
@@ -74,7 +76,10 @@ for (const target of TARGETS) {
       '--sign', identity,
       target,
     ], env);
+    // Both sidecars: cloudflared arrives signed by Cloudflare, but notarization
+    // wants every nested executable under the same Developer ID as the app.
     sign(join(bundled, 'Contents/MacOS/lr-server'));
+    sign(join(bundled, 'Contents/MacOS/cloudflared'));
     sign(bundled);
   } else {
     // An arm64 Mac refuses to launch code that is not signed at all, and Tauri
@@ -87,7 +92,7 @@ for (const target of TARGETS) {
   const executable = execFileSync('/usr/libexec/PlistBuddy',
     ['-c', 'Print :CFBundleExecutable', join(bundled, 'Contents/Info.plist')], { encoding: 'utf8' }).trim();
   const wanted = target.triple.startsWith('aarch64') ? 'arm64' : 'x86_64';
-  for (const binary of [executable, 'lr-server']) {
+  for (const binary of [executable, 'lr-server', 'cloudflared']) {
     const archs = execFileSync('lipo', ['-archs', join(bundled, 'Contents/MacOS', binary)], { encoding: 'utf8' }).trim();
     // Thin on purpose: a fat sidecar is the launch hang described above.
     if (archs !== wanted) throw new Error(`${binary} should be exactly ${wanted}, got "${archs}"`);
@@ -117,6 +122,10 @@ Apple menu > About This Mac: it names either an Apple chip or an Intel one.
    Later launches are quick.
 4. Allow incoming connections when macOS asks. Students need to reach this Mac.
 5. Connect students to the same network and share the QR code or join link.
+   If this Mac is on the school's wired network and students are on a Wi-Fi
+   that cannot reach it, press "Students On Another Network" in the launcher:
+   the QR code switches to an internet address that works from any network,
+   as long as both the Mac and the phones have internet access.
 6. Students scan the QR code, then type the class code shown on your screen.
    The link alone does not let anyone in.
 

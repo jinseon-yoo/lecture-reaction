@@ -30,28 +30,92 @@ export function joinUrl(base: string): string {
   return new URL(base).toString();
 }
 
+export type TunnelStatus = 'off' | 'starting' | 'up' | 'failed';
+
+export interface TunnelState {
+  status: TunnelStatus;
+  /** The public origin students open, once the tunnel has one. */
+  url: string | null;
+  error: string | null;
+}
+
 interface JoinUrlResponse {
   url: string;
   wsUrl: string;
   lanIp: string | null;
   port: number;
+  tunnel: TunnelState;
+}
+
+export interface JoinInfo {
+  /** The room-network address: fast, and wrong when the room is split. */
+  lanUrl: string;
+  lanIp: string | null;
+  tunnel: TunnelState;
+  /** Whichever of the two the class should actually be given. */
+  shareBase: string;
+}
+
+const TUNNEL_OFF: TunnelState = { status: 'off', url: null, error: null };
+
+/**
+ * Everything the launcher needs to decide what to put on the projector.
+ *
+ * If the endpoint is missing or unreachable we fall back to the configured
+ * origin, which is still correct when everyone is on the same machine.
+ */
+export async function fetchJoinInfo(signal?: AbortSignal): Promise<JoinInfo> {
+  const origin = serverOrigin();
+  const offline: JoinInfo = { lanUrl: origin, lanIp: null, tunnel: TUNNEL_OFF, shareBase: origin };
+  try {
+    const res = await fetch(`${origin}/api/join-url`, { signal });
+    if (!res.ok) return offline;
+    const data = (await res.json()) as Partial<JoinUrlResponse>;
+    const lanUrl = typeof data.url === 'string' && data.url.length > 0 ? data.url : origin;
+    const tunnel = data.tunnel ?? TUNNEL_OFF;
+    return {
+      lanUrl,
+      lanIp: data.lanIp ?? null,
+      tunnel,
+      // A live tunnel wins outright. The professor turned it on because the
+      // LAN address does not work from the seats, so continuing to hand out
+      // the LAN address would be handing out the known-broken one.
+      shareBase: tunnel.status === 'up' && tunnel.url ? `${tunnel.url}/` : lanUrl,
+    };
+  } catch {
+    return offline;
+  }
 }
 
 /**
- * The server knows its own LAN address, which is what the QR code must encode —
- * `localhost` is useless on a student's phone. If the endpoint is missing or
- * unreachable we fall back to the configured origin, which is still correct
- * when everyone is on the same machine.
+ * The address to hand the class, and nothing else.
+ *
+ * Kept as its own export because the overlay's gear menu wants only this —
+ * it has no toggle and no status to render, so it should not have to know
+ * that tunnels exist at all.
  */
 export async function fetchJoinBase(signal?: AbortSignal): Promise<string> {
-  const origin = serverOrigin();
+  return (await fetchJoinInfo(signal)).shareBase;
+}
+
+/** Brings the outbound tunnel up. Safe to call when it is already running. */
+export async function startTunnel(): Promise<TunnelState> {
+  return tunnelRequest('POST');
+}
+
+export async function stopTunnel(): Promise<TunnelState> {
+  return tunnelRequest('DELETE');
+}
+
+async function tunnelRequest(method: 'POST' | 'DELETE'): Promise<TunnelState> {
   try {
-    const res = await fetch(`${origin}/api/join-url`, { signal });
-    if (!res.ok) return origin;
-    const data = (await res.json()) as Partial<JoinUrlResponse>;
-    return typeof data.url === 'string' && data.url.length > 0 ? data.url : origin;
-  } catch {
-    return origin;
+    const res = await fetch(`${serverOrigin()}/api/tunnel`, { method });
+    if (!res.ok) {
+      return { status: 'failed', url: null, error: `server returned ${res.status}` };
+    }
+    return (await res.json()) as TunnelState;
+  } catch (err) {
+    return { status: 'failed', url: null, error: String(err) };
   }
 }
 

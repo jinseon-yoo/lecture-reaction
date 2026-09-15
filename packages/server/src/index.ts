@@ -2,9 +2,15 @@
  * Lecture React realtime server.
  *
  * One process serves three things:
- *   - a tiny JSON API (`/health`, `/api/session/:code`, `/api/join-url`)
+ *   - a tiny JSON API (`/health`, `/api/session/:code`, `/api/join-url`,
+ *     `/api/tunnel`)
  *   - the built student web app (apps/student/dist) with SPA fallback
  *   - the websocket hub at `/ws?role=professor|student`
+ *
+ * Students reach it one of two ways: directly over the room's LAN (the
+ * default, and the fast path), or through an outbound tunnel for the rooms
+ * where the lectern and the seats are on networks that cannot route to each
+ * other. See `tunnel.ts` for why that second path exists.
  */
 
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
@@ -15,6 +21,7 @@ import { normalizeCode } from '@lr/shared';
 import { Hub, type Role } from './hub.js';
 import { StaticSite } from './static.js';
 import { lanAddress, rankLanCandidates } from './lan.js';
+import { Tunnel } from './tunnel.js';
 
 const PORT = Number(process.env.PORT ?? 8787);
 const HOST = '0.0.0.0';
@@ -32,6 +39,21 @@ const STUDENT_DIST = process.env.LECTURE_STUDENT_DIST
 
 const hub = new Hub();
 const site = new StaticSite(STUDENT_DIST);
+const tunnel = new Tunnel(PORT);
+
+/**
+ * True when this request arrived through the tunnel rather than from the
+ * room's LAN or this machine.
+ *
+ * Loopback is not the test it looks like: `cloudflared` runs on this same
+ * machine and proxies to `127.0.0.1`, so a student on the other side of the
+ * world arrives with the same `remoteAddress` as the overlay does. What does
+ * separate them is that Cloudflare stamps every proxied request with its own
+ * headers, and nothing on the LAN path sets them.
+ */
+function viaTunnel(req: IncomingMessage): boolean {
+  return Boolean(req.headers['cf-ray'] ?? req.headers['cf-connecting-ip']);
+}
 
 /* ------------------------------------------------------------------ */
 /* HTTP                                                                */
@@ -51,8 +73,28 @@ function handleHttp(req: IncomingMessage, res: ServerResponse): void {
   const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
   const pathname = url.pathname;
 
+  // `DELETE /api/tunnel` is not a "simple" cross-origin request, so the
+  // overlay's webview asks permission before it sends one.
+  if (req.method === 'OPTIONS' && pathname.startsWith('/api/')) {
+    res.writeHead(204, {
+      'access-control-allow-origin': '*',
+      'access-control-allow-methods': 'GET, POST, DELETE, OPTIONS',
+      'access-control-allow-headers': 'content-type',
+      'access-control-max-age': '600',
+    });
+    res.end();
+    return;
+  }
+
   if (pathname === '/health') {
     return json(res, 200, { ok: true, activeSessions: hub.store.activeSessionCount() });
+  }
+
+  // Everything below is the professor's own control surface: it reports the
+  // machine's interface list and starts and stops processes. None of it should
+  // answer the public internet just because a tunnel is open.
+  if (pathname === '/api/join-url' || pathname === '/api/tunnel') {
+    if (viaTunnel(req)) return json(res, 404, { error: 'not_found' });
   }
 
   if (pathname === '/api/join-url') {
@@ -67,7 +109,23 @@ function handleHttp(req: IncomingMessage, res: ServerResponse): void {
       port: PORT,
       /** Every reachable-looking address, best first — for diagnostics and manual override. */
       candidates: rankLanCandidates(),
+      /**
+       * The tunnel is reported alongside the LAN address rather than replacing
+       * it. Which one the class should use is the professor's call — the
+       * launcher offers both — and silently swapping the URL behind a QR code
+       * that is already on the projector would strand whoever scanned it.
+       */
+      tunnel: tunnel.state,
     });
+  }
+
+  if (pathname === '/api/tunnel') {
+    // Started on demand, not at boot: most rooms never need it, it takes a few
+    // seconds, and a quick tunnel burns a hostname every time it runs.
+    if (req.method === 'POST') return json(res, 200, tunnel.start());
+    if (req.method === 'DELETE') return json(res, 200, tunnel.stop());
+    if (req.method === 'GET' || req.method === 'HEAD') return json(res, 200, tunnel.state);
+    return json(res, 405, { error: 'method_not_allowed' });
   }
 
   if (pathname.startsWith('/api/session/')) {
@@ -111,6 +169,19 @@ httpServer.on('upgrade', (req, socket, head) => {
     socket.destroy();
     return;
   }
+  // The professor socket is the one that can create and end classes. On the
+  // LAN it is reachable only from the room; a tunnel would publish it to the
+  // internet, so that role is refused to anything arriving through one. The
+  // overlay always connects over loopback and is unaffected.
+  //
+  // This is not the only thing standing between a stranger and a class — the
+  // per-session `token` in hub.ts already stops a takeover, and a fresh
+  // `session:create` only ever yields the caller their own empty session — but
+  // there is no reason to let a random visitor mint sessions and burn codes.
+  if (roleParam === 'professor' && viaTunnel(req)) {
+    socket.destroy();
+    return;
+  }
   const role: Role = roleParam;
   wss.handleUpgrade(req, socket, head, (ws) => hub.handleConnection(ws, role));
 });
@@ -143,6 +214,14 @@ httpServer.listen(PORT, HOST, () => {
       ? `[lecture-react] serving student app from ${STUDENT_DIST}`
       : '[lecture-react] student app not built yet (apps/student/dist missing)',
   );
+
+  // Normally the launcher asks for this when the professor decides the room
+  // needs it. `LECTURE_TUNNEL=1` is for running the server on its own —
+  // `pnpm dev:web`, a test, a room known in advance to be split.
+  if (process.env.LECTURE_TUNNEL === '1') {
+    console.log('[lecture-react] LECTURE_TUNNEL=1 — opening an outbound tunnel');
+    tunnel.start();
+  }
 });
 
 process.on('unhandledRejection', (reason) => {
@@ -156,6 +235,9 @@ process.on('uncaughtException', (err) => {
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.on(signal, () => {
     console.log(`[lecture-react] ${signal} — shutting down`);
+    // Before the hub, so a slow teardown never leaves cloudflared holding a
+    // public hostname open after the class is over.
+    tunnel.dispose();
     hub.dispose();
     wss.close();
     httpServer.close(() => process.exit(0));

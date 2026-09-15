@@ -38,3 +38,30 @@ load-bearing:
   notarization, and a downloaded copy still needs its quarantine flag cleared.
 - The archive is built with `ditto`, not `zip`. Only `ditto` keeps the bundle's
   symlinks and executable bits intact, and a mangled `.app` will not launch.
+
+## fetch-cloudflared.mjs
+
+Downloads the `cloudflared` binary that the outbound tunnel runs
+(`packages/server/src/tunnel.ts`): `pnpm cloudflared`.
+
+```sh
+pnpm cloudflared                                   # -> tools/.cache/cloudflared (this machine)
+node tools/fetch-cloudflared.mjs --target x86_64-pc-windows-msvc --out some/dir
+```
+
+The packaging scripts do not call the CLI; they import `stageCloudflaredSidecar(triple)`,
+which fetches the per-target build into `tools/.cache/cloudflared-<triple>/` and copies it to
+`apps/overlay/src-tauri/binaries/cloudflared-<triple>[.exe]` — the sidecar convention Tauri's
+`externalBin` expects, the same one `build-server-binary.mjs` follows for `lr-server`. Tauri
+drops the triple when it copies the file into the bundle, so at runtime it sits beside
+`lr-server` as plain `cloudflared`, which is the first place the server looks.
+
+It fetches `latest` rather than a pinned release, deliberately: an old client is the usual
+cause of a quick tunnel that negotiates forever and then fails, and here that happens in
+front of a lecture theatre. `LR_CLOUDFLARED_VERSION=2025.x.y` pins it when reproducibility
+matters more.
+
+The macOS build signs `cloudflared` with the same Developer ID as `lr-server` — it ships
+signed by Cloudflare, but notarization wants every nested executable under the app's own
+identity — and the `lipo -archs` check covers it, since a fat sidecar is the launch hang
+described above.

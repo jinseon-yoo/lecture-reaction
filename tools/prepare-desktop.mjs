@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { REPO, nodePlatform, pnpmCommand } from './platform.mjs';
+import { stageCloudflaredSidecar } from './fetch-cloudflared.mjs';
 
 function pnpm(args) {
   const [command, commandArgs] = pnpmCommand(args);
@@ -20,4 +21,8 @@ if (!dev || !existsSync(join(REPO, 'apps/student/dist/index.html'))) {
 if (!dev || !existsSync(binary)) {
   execFileSync(process.execPath, [join(REPO, 'tools/build-server-binary.mjs')], { cwd: REPO, stdio: 'inherit' });
 }
+// The tunnel client is a second sidecar, so Tauri wants it present too. A dev
+// run reuses the cached download; nothing is fetched twice.
+const cloudflared = join(REPO, `apps/overlay/src-tauri/binaries/cloudflared-${host}${nodePlatform().extension}`);
+if (!dev || !existsSync(cloudflared)) await stageCloudflaredSidecar(host);
 if (!dev) pnpm(['-F', '@lr/overlay', 'build']);

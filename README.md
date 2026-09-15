@@ -24,13 +24,16 @@ has not been uploaded; maintainers can use the [release instructions](#publish-a
 
 1. Download the ZIP and **extract the entire folder** onto your desktop or a
    writable USB drive. Do not run the app from inside the ZIP preview.
-2. Open **Lecture React.exe**. Keep `lr-server.exe`, `student/`, and
-   `portable.txt` beside it.
+2. Open **Lecture React.exe**. Keep `lr-server.exe`, `cloudflared.exe`, `student/`,
+   and `portable.txt` beside it.
 3. Connect the presentation computer and students to the same reachable network.
    When Windows Firewall asks, tick **both Private and Public** and allow access.
 4. Start a class and share its QR code or join link. If students scan it and the
    page will not load, see [Students scan the QR and nothing
-   loads](#students-scan-the-qr-and-nothing-loads).
+   loads](#students-scan-the-qr-and-nothing-loads). If the PC is on the school's
+   wired network and students are on a Wi-Fi that cannot reach it, press
+   **Students On Another Network** in the launcher — see [When the lectern and
+   the seats are on different networks](#when-the-lectern-and-the-seats-are-on-different-networks).
 5. Quit the app before safely ejecting the USB drive.
 
 Requires **64-bit Windows 10/11** and
@@ -48,6 +51,9 @@ and the PowerPoint overlay still need testing.
 ### Windows testing checklist
 
 - Open the app, start a class, and join from a phone on the same network.
+- Press **Students On Another Network**, wait for the QR to change to an
+  `https://….trycloudflare.com` address, and join from a phone on **cellular
+  data** (Wi-Fi off). This is the path a split campus network forces.
 - Send reactions and questions, vote on a question, and resolve it in the overlay.
 - Run a PowerPoint slideshow and check visibility and click-through outside the
   app controls. `Ctrl+Shift+L` toggles Interaction Mode.
@@ -160,15 +166,16 @@ lecture-reaction/
 │   │                code.ts (class-code generation/normalisation),
 │   │                theme.css (retro pixel design tokens)
 │   └── server/      Node 20 + ws realtime server; also serves the student app
+│       │            tunnel.ts drives the outbound cloudflared tunnel
 │       └── test/        smoke.mjs, simulate-class.mjs, lan.mjs
 ├── apps/
 │   ├── student/     Vite + React web app — what students open on their phone
 │   └── overlay/     Tauri v2 + React — the professor's desktop overlay
 │       └── src-tauri/   Rust shell: transparent window, click-through, sidecar
 │           ├── schemas/     vendored tauri.conf.json schema (editor only)
-│           └── binaries/    the standalone server sidecar (built, gitignored)
+│           └── binaries/    the server and cloudflared sidecars (built, gitignored)
 ├── tools/           dev-desktop.mjs (port-resolving launcher), free-ports.mjs,
-│                    build-server-binary.mjs, make-icon.mjs
+│                    build-server-binary.mjs, fetch-cloudflared.mjs, make-icon.mjs
 ├── .vscode/         hides target/ and caches from the tree and search
 └── docs/
     └── ARCHITECTURE.md
@@ -447,6 +454,7 @@ Testing a lecture tool normally needs a lecture. These stand in for one:
 | `pnpm test:tools` | Tests platform selection, shell-free command arguments, package entrypoints, and IPv6-disabled port handling. |
 | `pnpm build:desktop` | Builds student assets and the standalone server, then compiles and packages the desktop app for the current OS. |
 | `pnpm build:server-binary` | Compiles the server into a single self-contained executable for the desktop bundle. Downloads an official node into `tools/.cache` on first run. |
+| `pnpm cloudflared` | Downloads the `cloudflared` binary the outbound tunnel runs into `tools/.cache`, where a source-run server finds it. The packaging scripts fetch their own per-target copy; this one is for `pnpm dev` / `pnpm desktop`. `LECTURE_TUNNEL=1` makes a source-run server open the tunnel at boot. |
 | `pnpm icon` | Regenerates the app icon from the pixel grid in `tools/make-icon.mjs` and expands it to every platform size. Tauri needs `src-tauri/icons/32x32.png` at compile time — if it is missing, the **Rust** build fails with `failed to open icon`, which looks unrelated to icons at first glance. |
 
 One detail worth keeping: `free-ports.mjs` matches `-sTCP:LISTEN` only. A plain
@@ -471,7 +479,9 @@ Two things start: the realtime server, and a small **launcher** window.
 
 Get on the **same Wi-Fi the students will use** before you show anyone the code. The
 address students need comes from that network, and it is the one thing that will
-quietly ruin a class if it is wrong.
+quietly ruin a class if it is wrong. If you *cannot* — the lectern is on a wired
+staff network, the students on a guest Wi-Fi — test **Students On Another
+Network** with one phone before the class; see [below](#when-the-lectern-and-the-seats-are-on-different-networks).
 
 ### Starting the class
 
@@ -627,10 +637,57 @@ Work down this list; it is roughly in order of likelihood.
    nothing can reach the server. System Settings -> Network -> Firewall.
 3. **Is the address the right one?** Check the boot log against the list above. If
    the chosen line is a `bridge`/`vmnet`/`utun` interface, use `LECTURE_LAN_IP`.
-4. **Client isolation.** Many campus and guest networks block phone-to-laptop
-   traffic entirely as a security policy. Nothing in this app can work around that —
-   you need a different network, or the server hosted somewhere the campus routes to.
-   **Test this with one phone before you rely on it in front of a class.**
+4. **The two sides cannot route to each other.** Client isolation on a guest
+   Wi-Fi, or the lectern on staff Ethernet and the students on a separate
+   student SSID. No address is the right address here, because there is no path.
+   Press **Students On Another Network** — the next section — and
+   **test it with one phone before you rely on it in front of a class.**
+
+### When the lectern and the seats are on different networks
+
+A lot of campuses wire the lectern into a staff VLAN and put students on a guest
+or student SSID that is deliberately routed away from it. Every address the
+launcher can offer is then correct and unreachable at the same time, and no
+firewall rule on the laptop changes that.
+
+**Students On Another Network**, in the launcher under the share buttons, stops
+needing a path in. It starts a bundled `cloudflared` client that dials *out*
+from your machine to Cloudflare's edge and hands you a public
+`https://<random>.trycloudflare.com` address; students reach that, and it is
+proxied back down the same outbound connection. Both sides only ever make
+outbound connections, which is the one thing every campus network permits.
+
+What changes when it is on:
+
+- The QR code, **Copy Link**, and the overlay's gear menu all switch to the
+  public address. The class code is unchanged; it is still what admits students.
+- The student page is served over `https`, so the socket is `wss`. Nothing to
+  configure — the app picks it up from the page's own origin.
+- Reactions round-trip through a Cloudflare edge instead of the room's switch:
+  tens of milliseconds rather than single digits. Noticeable if you look for
+  it, not if you are lecturing.
+- Question text transits Cloudflare. Nothing is stored there, but it is no
+  longer true that the data never leaves the building.
+- The address is random and changes every time the tunnel starts. A link
+  pasted into the LMS last week is dead this week; share it per class.
+
+What it needs: **internet access on your machine and on the phones**, and a
+few seconds to come up (the launcher shows a spinner and the QR redraws
+itself). It needs no account, no hosting and costs nothing — quick tunnels are
+free and unauthenticated, which also means they are best-effort with no SLA.
+Cloudflare itself says as much. It is a fallback the professor turns on, not
+the default, for exactly that reason.
+
+While the tunnel is up the professor's own control surface — `/api/join-url`,
+`/api/tunnel`, and the `role=professor` socket — refuses anything that arrived
+through it. The overlay talks to the server over loopback and is unaffected;
+a stranger who finds the public address gets the student page and nothing else.
+
+If it fails to come up, the network is probably dropping UDP: `cloudflared`
+prefers QUIC on `udp/7844` and falls back to HTTP/2 only after a timeout. Set
+`LECTURE_TUNNEL_PROTOCOL=http2` to skip straight to the fallback. A machine
+that already has `cloudflared` installed can point at it with
+`LECTURE_CLOUDFLARED=/path/to/cloudflared`.
 
 ## Platform support
 
@@ -778,8 +835,10 @@ machines.
 
 If the rule is in place and phones still cannot connect, the network itself is
 the problem. Many campus and guest Wi-Fi networks enable **client isolation**,
-which blocks phone-to-laptop traffic regardless of any firewall rule. A phone
-hotspot that the laptop and the students both join is the usual way around it.
+or keep the lectern's Ethernet and the student Wi-Fi apart entirely, which
+blocks phone-to-laptop traffic regardless of any firewall rule. Press **Students
+On Another Network** in the launcher; see [When the lectern and the seats are on
+different networks](#when-the-lectern-and-the-seats-are-on-different-networks).
 Check `LECTURE_LAN_IP` too if the address in the QR is not the adapter you expect.
 
 ## Publish a GitHub release without Actions

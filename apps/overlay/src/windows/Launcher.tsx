@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faCopy, faQrcode, faCheck, faLink } from '@fortawesome/free-solid-svg-icons';
+import { faCopy, faQrcode, faCheck, faLink, faGlobe } from '@fortawesome/free-solid-svg-icons';
 import { useSession } from '../lib/SessionContext';
 import {
   allowFirewall,
@@ -10,7 +10,14 @@ import {
   showOverlay,
   type FirewallStatus,
 } from '../lib/desktop';
-import { fetchJoinBase, fetchSessionStatus, joinUrl } from '../lib/server';
+import {
+  fetchJoinInfo,
+  fetchSessionStatus,
+  joinUrl,
+  startTunnel,
+  stopTunnel,
+  type JoinInfo,
+} from '../lib/server';
 import { QrCanvas } from '../components/QrCanvas';
 
 /**
@@ -21,13 +28,20 @@ import { QrCanvas } from '../components/QrCanvas';
 const JOIN_URL_POLL_MS = 10_000;
 
 /**
+ * While the tunnel is coming up there is a professor watching a spinner, so
+ * the same poll runs much faster until it settles.
+ */
+const TUNNEL_POLL_MS = 1_500;
+
+/**
  * The small ordinary window: start the class, share the code, launch the
  * overlay. Once the overlay is up this window steps out of the way — and drops
  * its socket, so the server only ever holds one professor connection.
  */
 export function Launcher() {
   const { state, startClass, disconnect, reset } = useSession();
-  const [joinBase, setJoinBase] = useState<string | null>(null);
+  const [joinInfo, setJoinInfo] = useState<JoinInfo | null>(null);
+  const [tunnelBusy, setTunnelBusy] = useState(false);
   const [showQr, setShowQr] = useState(false);
   const [copied, setCopied] = useState<'link' | 'code' | null>(null);
   const [handedOff, setHandedOff] = useState(false);
@@ -47,15 +61,26 @@ export function Launcher() {
   useEffect(() => {
     let controller = new AbortController();
     let timer: number | undefined;
+    let cancelled = false;
 
+    // Self-scheduling rather than a fixed interval: the cadence depends on the
+    // answer. A tunnel that is still negotiating is worth asking about every
+    // second and a half; a settled address is not.
     const refresh = () => {
       controller.abort();
       controller = new AbortController();
-      void fetchJoinBase(controller.signal).then(setJoinBase);
+      void fetchJoinInfo(controller.signal).then((info) => {
+        if (cancelled) return;
+        setJoinInfo(info);
+        if (timer !== undefined) window.clearTimeout(timer);
+        timer = window.setTimeout(
+          refresh,
+          info.tunnel.status === 'starting' ? TUNNEL_POLL_MS : JOIN_URL_POLL_MS,
+        );
+      });
     };
 
     refresh();
-    timer = window.setInterval(refresh, JOIN_URL_POLL_MS);
 
     // A network change shows up immediately rather than on the next tick.
     const onOnline = () => refresh();
@@ -66,8 +91,9 @@ export function Launcher() {
     document.addEventListener('visibilitychange', onVisible);
 
     return () => {
+      cancelled = true;
       controller.abort();
-      if (timer !== undefined) window.clearInterval(timer);
+      if (timer !== undefined) window.clearTimeout(timer);
       window.removeEventListener('online', onOnline);
       document.removeEventListener('visibilitychange', onVisible);
     };
@@ -137,7 +163,28 @@ export function Launcher() {
   }, []);
 
   /** The full invite: address + code, so a student needs only to click it. */
-  const shareUrl = joinBase && state.code ? joinUrl(joinBase) : null;
+  const shareUrl = joinInfo && state.code ? joinUrl(joinInfo.shareBase) : null;
+
+  const tunnel = joinInfo?.tunnel ?? { status: 'off' as const, url: null, error: null };
+  const tunnelOn = tunnel.status === 'up' || tunnel.status === 'starting';
+
+  /**
+   * The escape hatch for a room where the lectern and the seats are on
+   * networks that cannot reach each other. Flipping it on replaces the address
+   * everywhere — the QR, Copy Link, and the overlay's own gear menu — because
+   * the professor only reaches for it when the LAN address is already known
+   * not to work.
+   */
+  const onToggleTunnel = useCallback(() => {
+    setTunnelBusy(true);
+    const request = tunnelOn ? stopTunnel() : startTunnel();
+    void request
+      .then((next) => setJoinInfo((prev) => (prev ? { ...prev, tunnel: next } : prev)))
+      .finally(() => {
+        setTunnelBusy(false);
+        void fetchJoinInfo().then(setJoinInfo);
+      });
+  }, [tunnelOn]);
 
   const onStartOverlay = useCallback(() => {
     if (isDesktop()) {
@@ -157,7 +204,13 @@ export function Launcher() {
   }, [startClass]);
 
   return (
-    <main className="h-full w-full flex flex-col items-center justify-center gap-5 px-6 text-center select-none">
+    /* The window is sized to fit every state without scrolling. `min-h-full`
+       rather than `h-full` so that when something does grow past it — a long
+       tunnel hostname, the firewall notice and the QR all at once on a short
+       laptop screen — the overflow scrolls instead of being clipped out of
+       reach, which a centred `h-full` flex column would do silently. */
+    <main className="h-full w-full overflow-y-auto">
+      <div className="min-h-full flex flex-col items-center justify-center gap-5 px-6 py-7 text-center select-none">
       <h1 className="lr-pixel text-[15px] tracking-[0.22em]">LECTURE REACT</h1>
 
       {classEnded ? (
@@ -197,8 +250,8 @@ export function Launcher() {
             {state.code}
           </div>
 
-          {showQr && joinBase && state.code ? (
-            <QrCanvas value={joinUrl(joinBase)} />
+          {showQr && shareUrl ? (
+            <QrCanvas value={shareUrl} />
           ) : (
             <div className="flex flex-col items-center gap-2">
               <div className="flex gap-2">
@@ -264,6 +317,43 @@ export function Launcher() {
             </div>
           )}
 
+          {/* Some lecture halls put the lectern on staff Ethernet and the seats
+              on a guest Wi-Fi that is routed away from it. No address is the
+              right address there, so the only fix is to stop needing students
+              to reach this machine at all. */}
+          <div className="flex max-w-[300px] flex-col items-center gap-1.5">
+            <button
+              type="button"
+              className="lr-btn"
+              onClick={onToggleTunnel}
+              disabled={tunnelBusy}
+            >
+              <FontAwesomeIcon icon={faGlobe} className="mr-2" />
+              {tunnelOn ? 'Use This Network' : 'Students On Another Network'}
+            </button>
+
+            {tunnel.status === 'starting' && (
+              <span className="lr-pixel text-[10px] text-[var(--lr-muted)] flex items-center gap-2">
+                <span className="lr-loader">
+                  <i />
+                  <i />
+                  <i />
+                </span>
+                opening a route…
+              </span>
+            )}
+
+            <p className="lr-text max-w-[300px] text-center text-[10px] text-[var(--lr-muted)]">
+              {tunnel.status === 'up'
+                ? 'Students are joining over the internet, so a phone on the school Wi-Fi works even when it cannot see this computer. Reactions arrive a little slower than on the local network.'
+                : tunnel.status === 'failed'
+                  ? (tunnel.error ?? 'Could not open an internet route.')
+                  : tunnel.status === 'starting'
+                    ? 'This takes a few seconds. The QR code updates itself when it is ready.'
+                    : 'Use this when students are on a different network from this computer and the QR code will not load for them.'}
+            </p>
+          </div>
+
           <p className="lr-pixel text-[10px] text-[var(--lr-muted)]">
             {state.presence} student{state.presence === 1 ? '' : 's'} joined
           </p>
@@ -273,6 +363,7 @@ export function Launcher() {
           </button>
         </>
       )}
+      </div>
     </main>
   );
 }
