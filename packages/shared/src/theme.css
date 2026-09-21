@@ -41,6 +41,27 @@
 
 .lr-pixel { font-family: var(--lr-font-pixel); letter-spacing: 0.02em; }
 .lr-text  { font-family: var(--lr-font-text); }
+
+/*
+ * Anywhere a student's or professor's own words are rendered.
+ *
+ * A question is arbitrary input capped only at 200 characters. The default
+ * `overflow-wrap: normal` breaks lines at spaces, and plenty of real questions
+ * offer none: a pasted URL, a long identifier, Korean or Japanese typed
+ * without them. One such question is six times wider than the card it lives
+ * in, and because the card clamps with `overflow: hidden` the text does not
+ * spill — it silently vanishes, which is worse. The enlarged view has no
+ * clamp, so there it spills out of the panel instead.
+ *
+ * `anywhere` rather than `break-word`: both break an oversized run, but only
+ * `anywhere` also lets the element's min-content width shrink, so a flex or
+ * grid parent cannot be stretched wide by a single unbreakable string.
+ */
+.lr-user-text {
+  overflow-wrap: anywhere;
+  /* Older WebKit ignores `anywhere`; this is the equivalent it understands. */
+  word-break: break-word;
+}
 .lr-mono  { font-family: var(--lr-font-mono); font-weight: 700; }
 
 /* ---------- surfaces ---------- */

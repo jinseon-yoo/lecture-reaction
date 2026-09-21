@@ -126,7 +126,9 @@ function Spotlight({
         </div>
       </header>
 
-      <p className="lr-text mt-4 text-[30px] leading-[1.3]">{card.text}</p>
+      <p className="lr-text lr-user-text lr-spotlight-text mt-4 text-[30px] leading-[1.3]">
+        {card.text}
+      </p>
     </section>
   );
 }
@@ -163,7 +165,9 @@ function Card({
         ▲ {card.votes}
       </span>
 
-      <p className="lr-text lr-clamp-4 mt-1 text-[13px] leading-[1.35] pr-16">{card.text}</p>
+      <p className="lr-text lr-user-text lr-clamp-4 mt-1 text-[13px] leading-[1.35] pr-16">
+        {card.text}
+      </p>
 
       <div className="absolute bottom-2 right-2 flex items-center gap-1">
         <button

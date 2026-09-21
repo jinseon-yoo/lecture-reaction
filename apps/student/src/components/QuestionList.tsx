@@ -62,7 +62,7 @@ function QuestionRow({ question, onVote }: { question: QuestionView; onVote: Pro
       </button>
 
       <div className="min-w-0 flex-1">
-        <p className="lr-text text-[15px] leading-snug break-words text-lr-dark">{question.text}</p>
+        <p className="lr-text lr-user-text text-[15px] leading-snug text-lr-dark">{question.text}</p>
         {resolved && (
           <p className="mt-2 font-pixel text-[10px] text-lr-dark">✓ Answered</p>
         )}

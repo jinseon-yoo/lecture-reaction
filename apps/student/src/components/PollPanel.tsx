@@ -29,7 +29,7 @@ export function PollPanel({ poll, answer, onAnswer }: Props) {
       <p className="font-pixel text-[10px] text-lr-dark">
         {poll.kind === 'understanding' ? 'Understanding check' : 'Quick poll'}
       </p>
-      <h2 id="poll-question" className="lr-text mt-2 text-[16px] leading-snug font-semibold text-lr-dark">
+      <h2 id="poll-question" className="lr-text lr-user-text mt-2 text-[16px] leading-snug font-semibold text-lr-dark">
         {poll.question}
       </h2>
 
@@ -42,7 +42,7 @@ export function PollPanel({ poll, answer, onAnswer }: Props) {
               type="button"
               onClick={() => onAnswer(option.id)}
               aria-pressed={selected}
-              className={`lr-btn lr-btn-lg min-h-[56px] w-full text-left ${
+              className={`lr-btn lr-btn-lg lr-user-text min-h-[56px] w-full text-left ${
                 selected ? 'lr-a-mint' : ''
               }`}
             >

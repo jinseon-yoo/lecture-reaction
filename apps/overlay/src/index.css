@@ -79,6 +79,19 @@ html.lr-role-overlay {
   z-index: 20;
 }
 
+/* ---------- enlarged question --------------------------------------- */
+/*
+ * Wrapping alone is not enough here. The enlarged view is centred with a
+ * -50% translate, so a question long enough to need many lines at 30px grows
+ * the panel off the top and bottom of the screen at once — on a short display
+ * both the votes and the resolve button leave the viewport. Cap the text and
+ * let it scroll instead; the panel stays reachable however long the question.
+ */
+.lr-spotlight-text {
+  max-height: 46vh;
+  overflow-y: auto;
+}
+
 /* ---------- compact poll panel ------------------------------------- */
 /* The opposite corner from the stack, directly above the control strip. */
 .lr-poll-compact {

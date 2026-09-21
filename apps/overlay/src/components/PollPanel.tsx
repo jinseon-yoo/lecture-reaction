@@ -116,7 +116,7 @@ export function PollPanel({
       aria-label="Poll results"
     >
       <header className="flex items-start justify-between gap-2">
-        <h2 className={`lr-pixel uppercase pr-2 ${size.title}`}>{title}</h2>
+        <h2 className={`lr-pixel lr-user-text uppercase pr-2 ${size.title}`}>{title}</h2>
         <div className="flex gap-1">
           <button
             type="button"
@@ -156,7 +156,7 @@ export function PollPanel({
       <ul className={`flex flex-col ${size.list}`}>
         {rows.map((row) => (
           <li key={row.id} className="flex items-center gap-2">
-            <span className={`lr-text shrink-0 ${size.label}`}>{row.label}</span>
+            <span className={`lr-text lr-user-text shrink-0 ${size.label}`}>{row.label}</span>
             <span className={`lr-pixel shrink-0 text-right ${size.pct}`}>{row.pct}%</span>
             <span className={`lr-bar-track grow ${size.track}`}>
               <span
