@@ -29,6 +29,17 @@ const CASES = {
     utun3:  [{ family: 'IPv4', address: '10.8.0.6',     internal: false }],
     'Tailscale': [{ family: 'IPv4', address: '100.64.0.3', internal: false }],
   },
+  // The lecture-room case: a fixed PC wired into a staff network that students
+  // cannot reach, plus a USB dongle on the Wi-Fi they are actually on. The
+  // dongle is named by its product, so it must still beat the wired port.
+  'School PC (wired staff VLAN + USB Wi-Fi dongle)': {
+    'Ethernet':                     [{ family: 'IPv4', address: '10.20.0.15',   internal: false }],
+    'TP-Link Wireless USB Adapter': [{ family: 'IPv4', address: '192.168.30.77', internal: false }],
+  },
+  'School PC (Realtek dongle, vendor-first name)': {
+    'Ethernet 2':                                   [{ family: 'IPv4', address: '10.20.0.16',    internal: false }],
+    'Realtek 8812BU Wireless LAN 802.11ac USB NIC': [{ family: 'IPv4', address: '192.168.30.78', internal: false }],
+  },
 };
 
 const EXPECTED = {
@@ -37,6 +48,8 @@ const EXPECTED = {
   'Windows desktop (Hyper-V + ethernet)': '192.168.1.50',
   'Linux (wifi + docker + wired)': '10.0.0.7',
   'VPN active (should not win)': '192.168.4.11',
+  'School PC (wired staff VLAN + USB Wi-Fi dongle)': '192.168.30.77',
+  'School PC (Realtek dongle, vendor-first name)': '192.168.30.78',
 };
 
 let failures = 0;

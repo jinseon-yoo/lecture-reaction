@@ -38,7 +38,7 @@ export function QrCanvas({ value, size = 240 }: { value: string; size?: number }
         ref={canvasRef}
         width={size}
         height={size}
-        className="border-2 border-[var(--lr-dark)] rounded-[3px]"
+        className="border-2 border-(--lr-dark) rounded-[3px]"
       />
       {/* Readable on purpose: a phone that will not scan can be handed this to
           type, and it is the first thing to check when nobody can connect. */}

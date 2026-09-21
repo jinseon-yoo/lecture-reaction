@@ -57,10 +57,10 @@ writeFileSync(join(output, 'READ ME.txt'), `LECTURE REACT - WINDOWS USB EDITION
 2. Open Lecture React.exe. Keep lr-server.exe, cloudflared.exe and student beside it.
 3. When Windows Firewall asks, tick BOTH Private and Public, then Allow access.
 4. Connect students to the same network and share the QR code or join link.
-   If the PC is on the school's wired network and students are on a Wi-Fi that
-   cannot reach it, press "Students On Another Network" in the launcher: the
-   QR code switches to an internet address that works from any network, as
-   long as both the PC and the phones have internet access.
+   The QR code is an internet address by default, so it works from any network
+   the phones are on - including when the school Wi-Fi blocks devices from
+   reaching each other, which is common. It needs internet on this PC and on
+   the phones, and a few seconds at startup.
 5. Quit the app fully before safely ejecting the USB drive.
 
 IF STUDENTS SCAN THE QR AND THE PAGE WILL NOT LOAD
@@ -76,12 +76,10 @@ network profile. The launcher shows an "Allow Students Through" button when the 
 is missing. If that prompt is refused or unavailable, right-click
 "Allow Firewall.cmd" and choose "Run as administrator" instead.
 
-Still nothing? Some campus networks keep the lectern's Ethernet and the student
-Wi-Fi apart on purpose, which blocks phone-to-laptop traffic no matter what the
-firewall says. Press "Students On Another Network" in the launcher. It opens an
-outbound connection from this PC to the internet and gives students a public
-https address instead, so nothing has to reach the PC directly. It needs
-internet access on both sides and takes a few seconds to come up.
+The firewall only matters for the LOCAL address. The default join address is an
+internet address that needs no incoming connection at all, so if you switched to
+"Use This Wi-Fi Instead", switch back. Many campus networks block devices on the
+same Wi-Fi from reaching each other, no matter what the firewall says.
 
 Requires x64 Windows 10/11 and Microsoft Edge WebView2 Runtime.
 If WebView2 is missing, install it from https://developer.microsoft.com/microsoft-edge/webview2/

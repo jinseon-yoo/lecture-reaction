@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import { faCopy, faQrcode, faCheck, faLink, faGlobe } from '@fortawesome/free-solid-svg-icons';
+import { faCopy, faQrcode, faCheck, faLink, faGlobe, faWifi } from '@fortawesome/free-solid-svg-icons';
 import { useSession } from '../lib/SessionContext';
 import {
   allowFirewall,
@@ -162,18 +162,23 @@ export function Launcher() {
     window.setTimeout(() => setCopied(null), 1400);
   }, []);
 
-  /** The full invite: address + code, so a student needs only to click it. */
-  const shareUrl = joinInfo && state.code ? joinUrl(joinInfo.shareBase) : null;
-
   const tunnel = joinInfo?.tunnel ?? { status: 'off' as const, url: null, error: null };
   const tunnelOn = tunnel.status === 'up' || tunnel.status === 'starting';
+  /** Held back until the address is settled, so the QR is never swapped mid-class. */
+  const addressPending = joinInfo?.pending ?? false;
+
+  /** The full invite: address + code, so a student needs only to click it. */
+  const shareUrl =
+    joinInfo && state.code && !addressPending ? joinUrl(joinInfo.shareBase) : null;
 
   /**
-   * The escape hatch for a room where the lectern and the seats are on
-   * networks that cannot reach each other. Flipping it on replaces the address
-   * everywhere — the QR, Copy Link, and the overlay's own gear menu — because
-   * the professor only reaches for it when the LAN address is already known
-   * not to work.
+   * Switches between the two ways in.
+   *
+   * The default is the internet address, because it is the only one that works
+   * regardless of whether the room's access point lets its clients talk to
+   * each other. This turns it off in favour of the local address, which is
+   * faster and keeps the traffic in the building — worth having when the
+   * professor knows the network allows it.
    */
   const onToggleTunnel = useCallback(() => {
     setTunnelBusy(true);
@@ -215,7 +220,7 @@ export function Launcher() {
 
       {classEnded ? (
         <>
-          <p className="lr-pixel text-[11px] text-[var(--lr-muted)]">CLASS ENDED</p>
+          <p className="lr-pixel text-[11px] text-(--lr-muted)">CLASS ENDED</p>
           <button type="button" className="lr-btn lr-btn-primary lr-btn-lg" onClick={onStart}>
             [ START CLASS ]
           </button>
@@ -231,7 +236,7 @@ export function Launcher() {
             [ START CLASS ]
           </button>
           {starting && (
-            <span className="lr-pixel text-[10px] text-[var(--lr-muted)] flex items-center gap-2">
+            <span className="lr-pixel text-[10px] text-(--lr-muted) flex items-center gap-2">
               <span className="lr-loader">
                 <i />
                 <i />
@@ -241,7 +246,7 @@ export function Launcher() {
             </span>
           )}
           {state.lastError && (
-            <p className="lr-text text-[11px] text-[var(--lr-muted)]">{state.lastError}</p>
+            <p className="lr-text text-[11px] text-(--lr-muted)">{state.lastError}</p>
           )}
         </>
       ) : (
@@ -273,7 +278,12 @@ export function Launcher() {
                   <FontAwesomeIcon icon={copied === 'code' ? faCheck : faCopy} className="mr-2" />
                   {copied === 'code' ? 'Copied' : 'Copy Code'}
                 </button>
-                <button type="button" className="lr-btn" onClick={() => setShowQr(true)}>
+                <button
+                  type="button"
+                  className="lr-btn"
+                  onClick={() => setShowQr(true)}
+                  disabled={!shareUrl}
+                >
                   <FontAwesomeIcon icon={faQrcode} className="mr-2" />
                   Show QR
                 </button>
@@ -282,9 +292,20 @@ export function Launcher() {
               {/* Shown so it is obvious what "Copy Link" put on the clipboard,
                   and so the address can be read out if someone cannot scan. */}
               {shareUrl && (
-                <p className="lr-text max-w-[300px] break-all text-[10px] text-[var(--lr-muted)]">
+                <p className="lr-text max-w-[300px] break-all text-[10px] text-(--lr-muted)">
                   {shareUrl}
                 </p>
+              )}
+
+              {addressPending && (
+                <span className="lr-pixel text-[10px] text-(--lr-muted) flex items-center gap-2">
+                  <span className="lr-loader">
+                    <i />
+                    <i />
+                    <i />
+                  </span>
+                  preparing the join address…
+                </span>
               )}
             </div>
           )}
@@ -297,7 +318,7 @@ export function Launcher() {
 
           {firewall.supported && !firewall.allowed && (
             <div className="flex max-w-[300px] flex-col items-center gap-1.5">
-              <p className="lr-text text-center text-[10px] text-[var(--lr-muted)]">
+              <p className="lr-text text-center text-[10px] text-(--lr-muted)">
                 Windows Firewall is blocking student connections. Scanning the QR will
                 time out until it is allowed.
               </p>
@@ -310,51 +331,42 @@ export function Launcher() {
                 {fixingFirewall ? 'Waiting for Windows…' : 'Allow Students Through'}
               </button>
               {firewallError && (
-                <p className="lr-text text-center text-[10px] text-[var(--lr-muted)]">
+                <p className="lr-text text-center text-[10px] text-(--lr-muted)">
                   {firewallError}
                 </p>
               )}
             </div>
           )}
 
-          {/* Some lecture halls put the lectern on staff Ethernet and the seats
-              on a guest Wi-Fi that is routed away from it. No address is the
-              right address there, so the only fix is to stop needing students
-              to reach this machine at all. */}
+          {/* Being on the same Wi-Fi is not the same as being able to reach
+              each other: campus access points routinely block client-to-client
+              traffic, and nothing here can detect that in advance. So the
+              address that works either way is the default, and the local one —
+              faster, and it keeps the traffic in the building — is the choice
+              the professor makes when they know the network allows it. */}
           <div className="flex max-w-[300px] flex-col items-center gap-1.5">
             <button
               type="button"
               className="lr-btn"
               onClick={onToggleTunnel}
-              disabled={tunnelBusy}
+              disabled={tunnelBusy || tunnel.status === 'starting'}
             >
-              <FontAwesomeIcon icon={faGlobe} className="mr-2" />
-              {tunnelOn ? 'Use This Network' : 'Students On Another Network'}
+              <FontAwesomeIcon icon={tunnelOn ? faWifi : faGlobe} className="mr-2" />
+              {tunnelOn ? 'Use This Wi-Fi Instead' : 'Use Any Network'}
             </button>
 
-            {tunnel.status === 'starting' && (
-              <span className="lr-pixel text-[10px] text-[var(--lr-muted)] flex items-center gap-2">
-                <span className="lr-loader">
-                  <i />
-                  <i />
-                  <i />
-                </span>
-                opening a route…
-              </span>
-            )}
-
-            <p className="lr-text max-w-[300px] text-center text-[10px] text-[var(--lr-muted)]">
+            <p className="lr-text max-w-[300px] text-center text-[10px] text-(--lr-muted)">
               {tunnel.status === 'up'
-                ? 'Students are joining over the internet, so a phone on the school Wi-Fi works even when it cannot see this computer. Reactions arrive a little slower than on the local network.'
+                ? 'Students join over the internet, so a phone works whether or not this Wi-Fi lets devices see each other. Switch to this Wi-Fi only if you have tested that a phone on it can load the page.'
                 : tunnel.status === 'failed'
-                  ? (tunnel.error ?? 'Could not open an internet route.')
+                  ? `Internet route unavailable, so students must be on a network that can reach this computer. ${tunnel.error ?? ''}`
                   : tunnel.status === 'starting'
-                    ? 'This takes a few seconds. The QR code updates itself when it is ready.'
-                    : 'Use this when students are on a different network from this computer and the QR code will not load for them.'}
+                    ? 'Working out the address students should use. A few seconds.'
+                    : 'Students must be on this same Wi-Fi, and it must allow devices to reach each other. Test with one phone before the class.'}
             </p>
           </div>
 
-          <p className="lr-pixel text-[10px] text-[var(--lr-muted)]">
+          <p className="lr-pixel text-[10px] text-(--lr-muted)">
             {state.presence} student{state.presence === 1 ? '' : 's'} joined
           </p>
 

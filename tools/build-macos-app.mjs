@@ -122,10 +122,10 @@ Apple menu > About This Mac: it names either an Apple chip or an Intel one.
    Later launches are quick.
 4. Allow incoming connections when macOS asks. Students need to reach this Mac.
 5. Connect students to the same network and share the QR code or join link.
-   If this Mac is on the school's wired network and students are on a Wi-Fi
-   that cannot reach it, press "Students On Another Network" in the launcher:
-   the QR code switches to an internet address that works from any network,
-   as long as both the Mac and the phones have internet access.
+   The QR code is an internet address by default, so it works from any network
+   the phones are on - including when the school Wi-Fi blocks devices from
+   reaching each other, which is common. It needs internet on this Mac and on
+   the phones, and a few seconds at startup.
 6. Students scan the QR code, then type the class code shown on your screen.
    The link alone does not let anyone in.
 

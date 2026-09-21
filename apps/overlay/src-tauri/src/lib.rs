@@ -54,6 +54,8 @@ pub const OVERLAY_LABEL: &str = "overlay";
 /// How often the cursor is sampled. 20 Hz is imperceptible for hovering a
 /// button and costs almost nothing.
 const CURSOR_POLL_MS: u64 = 50;
+/// Cursor ticks between display-layout re-checks (~1s at 50ms).
+const BOUNDS_CHECK_TICKS: u32 = 20;
 
 /* ------------------------------------------------------------------ */
 /* Shared state                                                        */
@@ -88,6 +90,16 @@ struct ToggleEvent {
 /* ------------------------------------------------------------------ */
 
 /// Screen geometry the overlay should cover.
+///
+/// Re-read every time it is needed, never cached. A teaching machine's display
+/// layout changes constantly — the projector is plugged in after the app is
+/// open, the resolution switches when the presentation starts, the laptop is
+/// mirrored and then extended. Deriving this once at window construction meant
+/// the overlay kept whatever rectangle the machine happened to have at launch,
+/// so it covered the wrong area (or a screen that no longer existed) for the
+/// rest of the session. From the professor's side that looks exactly like the
+/// transparent overlay being broken: the window is fine, it is simply drawing
+/// somewhere the slides are not.
 fn overlay_bounds<R: Runtime>(app: &AppHandle<R>) -> (PhysicalPosition<i32>, PhysicalSize<u32>) {
     // `available_monitors`/`primary_monitor` can both fail on a headless or
     // still-initialising display server; fall back to a sane default rather
@@ -102,6 +114,17 @@ fn overlay_bounds<R: Runtime>(app: &AppHandle<R>) -> (PhysicalPosition<i32>, Phy
     } else {
         (PhysicalPosition::new(0, 0), PhysicalSize::new(1440, 900))
     }
+}
+
+/// Snaps the overlay onto the current screen rectangle.
+///
+/// Physical pixels on purpose: the logical size Tauri computes from a scale
+/// factor rounds, and a rounded full-screen overlay leaves a hairline of
+/// desktop showing along one edge.
+fn apply_overlay_bounds<R: Runtime>(app: &AppHandle<R>, window: &WebviewWindow<R>) {
+    let (pos, size) = overlay_bounds(app);
+    let _ = window.set_position(pos);
+    let _ = window.set_size(size);
 }
 
 /// Creates the overlay window, hidden. Idempotent.
@@ -142,8 +165,7 @@ fn build_overlay<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<WebviewWindow<
 
     // Cover the screen exactly, in physical pixels, regardless of rounding in
     // the logical sizes above.
-    let _ = window.set_position(pos);
-    let _ = window.set_size(size);
+    apply_overlay_bounds(app, &window);
 
     // Stay above a fullscreen Keynote/PowerPoint and follow the professor
     // across Spaces. Both calls are best-effort: on platforms/versions where
@@ -185,12 +207,36 @@ fn spawn_cursor_poller<R: Runtime>(app: AppHandle<R>, window: WebviewWindow<R>) 
 
     std::thread::spawn(move || {
         let mut last = (f64::NAN, f64::NAN);
+        // Display layout is re-checked on a slow multiple of the cursor tick.
+        let mut ticks_until_bounds_check: u32 = 0;
         while running.load(Ordering::Relaxed) {
             std::thread::sleep(Duration::from_millis(CURSOR_POLL_MS));
 
             // If the overlay is hidden there is nothing to hit-test.
             if !window.is_visible().unwrap_or(false) {
                 continue;
+            }
+
+            // Follow the screen while the class is running.
+            //
+            // There is no portable "display configuration changed" event to
+            // subscribe to, and the professor changes the layout mid-lecture
+            // more often than anyone expects: switching PowerPoint into
+            // presenter view, mirroring for a question, unplugging at the end.
+            // This thread is already awake, so it re-reads the monitor
+            // rectangle about once a second and re-snaps only when it actually
+            // differs — which is never, until it matters.
+            if ticks_until_bounds_check == 0 {
+                ticks_until_bounds_check = BOUNDS_CHECK_TICKS;
+                let (want_pos, want_size) = overlay_bounds(&app);
+                let same = window.outer_position().is_ok_and(|p| p == want_pos)
+                    && window.outer_size().is_ok_and(|s| s == want_size);
+                if !same {
+                    let _ = window.set_position(want_pos);
+                    let _ = window.set_size(want_size);
+                }
+            } else {
+                ticks_until_bounds_check -= 1;
             }
 
             let Ok(cursor) = app.cursor_position() else {
@@ -232,6 +278,10 @@ fn apply_click_through<R: Runtime>(app: &AppHandle<R>, state: &OverlayState) {
 #[tauri::command]
 fn show_overlay(app: AppHandle, state: State<'_, OverlayState>) -> Result<(), String> {
     let window = build_overlay(&app).map_err(|e| e.to_string())?;
+    // The window is pre-created at startup so this is instant, which means its
+    // geometry is as old as the app. The projector is usually plugged in
+    // somewhere between those two moments, so re-snap before showing it.
+    apply_overlay_bounds(&app, &window);
     window.show().map_err(|e| e.to_string())?;
     // Never steal focus from the presentation.
     let _ = window.set_always_on_top(true);

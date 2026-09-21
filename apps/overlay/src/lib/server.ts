@@ -48,12 +48,21 @@ interface JoinUrlResponse {
 }
 
 export interface JoinInfo {
-  /** The room-network address: fast, and wrong when the room is split. */
+  /** The room-network address: fastest, and dead if the Wi-Fi isolates clients. */
   lanUrl: string;
   lanIp: string | null;
   tunnel: TunnelState;
   /** Whichever of the two the class should actually be given. */
   shareBase: string;
+  /**
+   * True while the join address is still being decided.
+   *
+   * The tunnel takes a few seconds to negotiate at startup. Showing the LAN
+   * address during that window and then swapping it is the one thing that
+   * must not happen: the QR is on the projector by then, and whoever scanned
+   * it early is on an address that is no longer the one being handed out.
+   */
+  pending: boolean;
 }
 
 const TUNNEL_OFF: TunnelState = { status: 'off', url: null, error: null };
@@ -66,7 +75,13 @@ const TUNNEL_OFF: TunnelState = { status: 'off', url: null, error: null };
  */
 export async function fetchJoinInfo(signal?: AbortSignal): Promise<JoinInfo> {
   const origin = serverOrigin();
-  const offline: JoinInfo = { lanUrl: origin, lanIp: null, tunnel: TUNNEL_OFF, shareBase: origin };
+  const offline: JoinInfo = {
+    lanUrl: origin,
+    lanIp: null,
+    tunnel: TUNNEL_OFF,
+    shareBase: origin,
+    pending: false,
+  };
   try {
     const res = await fetch(`${origin}/api/join-url`, { signal });
     if (!res.ok) return offline;
@@ -77,10 +92,14 @@ export async function fetchJoinInfo(signal?: AbortSignal): Promise<JoinInfo> {
       lanUrl,
       lanIp: data.lanIp ?? null,
       tunnel,
-      // A live tunnel wins outright. The professor turned it on because the
-      // LAN address does not work from the seats, so continuing to hand out
-      // the LAN address would be handing out the known-broken one.
+      // A live tunnel wins outright, and it is on by default. The LAN address
+      // only works if the access point lets two of its own clients talk to
+      // each other, which a campus network routinely does not; the tunnel
+      // works either way. Handing out the one that might be dead, when a
+      // working one is right there, is not a trade worth making for latency
+      // nobody can perceive in a reaction that floats for three seconds.
       shareBase: tunnel.status === 'up' && tunnel.url ? `${tunnel.url}/` : lanUrl,
+      pending: tunnel.status === 'starting',
     };
   } catch {
     return offline;

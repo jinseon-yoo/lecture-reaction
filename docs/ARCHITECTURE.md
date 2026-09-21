@@ -115,18 +115,28 @@ WebSocket endpoint, so the URL the server prints on boot (`http://<lan-ip>:8787`
 page and the socket origin. No app store, no login, no permissions prompt. The professor reads
 the code off the overlay; students type it into a page reachable on the room's network.
 
-### Two ways in: the LAN, or an outbound tunnel
+### Two ways in: an outbound tunnel by default, or the LAN
 
-The topology above assumes a phone can open a socket to the professor's machine. On a
-lot of campuses it cannot: the lectern is wired into a staff VLAN, the students are on a
-guest SSID, and the two are routed apart on purpose. No firewall rule on the laptop
-changes that — there is no path between the two networks at all — so `lan.ts` can pick
-a perfectly correct address that is unreachable from every seat in the room.
+The topology above assumes a phone can open a socket to the professor's machine. That
+assumption is wrong more often than it is right, and — this is the part that took a
+release to learn — it is wrong *even when everybody is on the same Wi-Fi*. Campus and
+guest access points routinely enable **client isolation**: every device gets internet,
+and no device can talk to another device on the same SSID. `lan.ts` then picks a
+perfectly correct address that answers from the lectern and is dead from every seat.
+The split-network case (lectern on a staff VLAN, students on a guest SSID) is the same
+failure with a more obvious cause.
 
-The fix is to stop asking for an inbound path. `packages/server/src/tunnel.ts` drives a
-bundled `cloudflared` client that dials **out** from the professor's machine to
-Cloudflare's edge and holds the connection open; students reach a public
-`https://<random>.trycloudflare.com` hostname that is proxied back down it.
+Nothing on the professor's machine can detect either case in advance, and it cannot be
+negotiated per student: a page served over the tunnel cannot probe the LAN address
+(mixed content), and a LAN page that never loaded cannot fall back to anything.
+Whichever address goes into the QR code is the only one the class gets. So the default
+has to be the one that works on both kinds of network.
+
+`packages/server/src/tunnel.ts` drives a bundled `cloudflared` client that dials **out**
+from the professor's machine to Cloudflare's edge and holds the connection open;
+students reach a public `https://<random>.trycloudflare.com` hostname that is proxied
+back down it. It is started at server boot, not on demand, so it is negotiated long
+before anyone looks at a QR code.
 
 ```
    PROFESSOR MACHINE (staff Ethernet)              STUDENT PHONES (guest Wi-Fi)
@@ -156,17 +166,28 @@ that do are:
   `cloudflared` runs on the same machine and proxies to `127.0.0.1`, so a student on
   the far side of the world arrives with the overlay's `remoteAddress`. `cf-ray` /
   `cf-connecting-ip` are what separate them, and nothing on the LAN path sets those.
-- The launcher, which offers **Students On Another Network** and, once the tunnel is
-  up, hands out the public address everywhere a LAN address was handed out before.
+- The launcher, which hands out the public address once the tunnel is up, holds the QR
+  back while it is still negotiating (showing one address and then swapping it strands
+  whoever scanned early), and offers **Use This Wi-Fi Instead** for a professor who has
+  tested that the room's network allows it.
 
 Why this and not a hosted relay: a relay means a VPS, a domain, TLS renewal and someone
 paying for it every month, for a tool whose entire pitch is "no account, no cloud".
 Quick tunnels are free and unauthenticated. The costs are the honest ones: the hostname
 is random per start, there is no SLA, reactions add a Cloudflare round-trip (tens of
-milliseconds, not the LAN's single digits), and question text transits Cloudflare. That
-is why it is a fallback the professor turns on, not the default. The student app needs
-no change at all — the public origin is `https:`, so `resolveSocketUrl()` picks `wss:`
-from `window.location` as it always has.
+milliseconds, not the LAN's single digits), and question text transits Cloudflare. All
+of that is worth it against a class that cannot join at all, which is why the trade
+runs this way round rather than the other. The student app needs no change at all — the
+public origin is `https:`, so `resolveSocketUrl()` picks `wss:` from `window.location`
+as it always has.
+
+`lan.ts` still matters for the local option, and its scoring is tuned for the room
+rather than the developer's laptop: a USB Wi-Fi dongle is reported by Windows under its
+product name (`Realtek 8812BU Wireless LAN 802.11ac USB NIC`), which no `^wi-?fi`
+pattern matches, so wireless keywords are matched anywhere in the name and wireless
+outranks wired. When a classroom PC offers both, the radio the students share wins:
+preferring Wi-Fi when Ethernet would also have worked costs milliseconds, preferring
+Ethernet when it is a separate VLAN costs the lecture.
 
 ### Single source of truth
 
@@ -437,6 +458,38 @@ Points that matter for whoever maintains this:
 
 Platform note: this is verified on macOS. Windows and Linux click-through behaviour is listed
 under future work (§13).
+
+### Sized from the screen it is drawn on, never from pixels
+
+The overlay covers a whole display, and that display changes constantly: a 13" laptop
+panel in the office, a 1080p projector in the hall, a 4K panel in the seminar room, and
+frequently a different one mid-lecture as PowerPoint switches into presenter view. Two
+separate things have to follow it.
+
+**The window.** `overlay_bounds()` is re-read every time it is used and never cached.
+Deriving it once at window construction meant the overlay kept whatever rectangle the
+machine had at launch — so plugging in the projector afterwards left it covering the
+wrong area, or a screen that no longer existed. From the professor's side that is
+indistinguishable from the transparency being broken: the window is fine, it is simply
+drawing where the slides are not. It is re-snapped on `show_overlay`, and the cursor
+poller (already awake at 20 Hz) re-reads the monitor rectangle about once a second and
+corrects only when it actually differs.
+
+**The panels.** Every panel is placed from `--lr-edge` / `--lr-panel-w` in `index.css`,
+which are `clamp()`s of viewport units — a floor so text stays legible on a small
+screen, a viewport-relative middle so panels grow with the projector, a ceiling so a 4K
+display does not hand the questions half the wall. The question stack is pinned to the
+bottom-right corner and grows upward; the compact poll panel to the bottom-left, above
+the control strip.
+
+The control strip is the one the professor can move, and it stores a **corner plus an
+inset**, not a coordinate. Absolute pixels were the bug: `{x: 24, y: 832}` is the
+bottom-left corner of a 900px-tall laptop screen and the middle of a 1080p projector, so
+a strip placed once in the office drifted into the slides the first time the machine met
+a different display — the one place it must never be. Clamping it back into the viewport
+does not help, because clamping keeps a panel on screen without keeping it in a corner.
+An anchor survives the change by construction; dragging snaps to the nearest corner on
+drop, and a resize trims only the dragged offset, never the corner the professor chose.
 
 ### What the overlay draws
 

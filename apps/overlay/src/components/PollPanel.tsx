@@ -84,6 +84,8 @@ export function PollPanel({
   // markup below stays a single tree.
   const size = presenting
     ? {
+        // Presenting is the one case that *should* be centred: the results are
+        // being shown to the room, not kept out of the professor's way.
         frame: 'left-1/2 top-1/2 w-[min(78vw,880px)] -translate-x-1/2 -translate-y-1/2 px-8 py-6 z-40',
         title: 'text-[20px] tracking-[0.14em]',
         button: 'p-2! text-[16px]!',
@@ -94,9 +96,10 @@ export function PollPanel({
         total: 'text-[14px] mt-4',
       }
     : {
-        frame: `left-6 w-[300px] px-3 py-2 z-30 transition-[bottom] duration-200 ${
-          raised ? 'bottom-[19rem]' : 'bottom-24'
-        }`,
+        // Position and width come from the overlay's screen-derived tokens
+        // (see `.lr-poll-compact` in index.css); only the vertical clearance
+        // over the control strip is decided here.
+        frame: `lr-poll-compact px-3 py-2 ${raised ? 'bottom-[19rem]' : 'bottom-24'}`,
         title: 'text-[10px] tracking-[0.12em]',
         button: 'p-1! text-[10px]!',
         list: 'mt-2 gap-1.5',
@@ -170,7 +173,7 @@ export function PollPanel({
         ))}
       </ul>
 
-      <p className={`lr-pixel text-[var(--lr-muted)] ${size.total}`}>(n={results.total})</p>
+      <p className={`lr-pixel text-(--lr-muted) ${size.total}`}>(n={results.total})</p>
     </section>
   );
 }

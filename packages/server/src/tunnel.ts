@@ -53,8 +53,16 @@ export interface TunnelState {
   error: string | null;
 }
 
-/** How long cloudflared gets to hand us a hostname before we call it failed. */
-const STARTUP_TIMEOUT_MS = 30_000;
+/**
+ * How long cloudflared gets to hand us a hostname before we call it failed.
+ *
+ * The launcher holds the join address back while this is running, so the class
+ * is never shown one address and then quietly handed another. That makes this
+ * a number someone is waiting on: long enough for a slow campus uplink to
+ * finish a QUIC handshake, short enough that a machine with no internet at all
+ * falls back to the LAN address while the professor is still setting up.
+ */
+const STARTUP_TIMEOUT_MS = 20_000;
 /** Backoff after the child dies unexpectedly, so a flapping edge is not a spin. */
 const RESTART_DELAY_MS = 2_000;
 /** Give up rather than reconnect forever in front of a class. */
@@ -228,8 +236,9 @@ export class Tunnel {
     this.#startupTimer = setTimeout(() => {
       if (this.#status !== 'starting') return;
       this.fail(
-        'cloudflared did not return a public address within 30s. ' +
-          'The network may be blocking it — try LECTURE_TUNNEL_PROTOCOL=http2.',
+        `no public address within ${STARTUP_TIMEOUT_MS / 1000}s — students will have to be ` +
+          'on a network that can reach this computer. If this machine has internet, the ' +
+          'network may be blocking QUIC: try LECTURE_TUNNEL_PROTOCOL=http2.',
       );
     }, STARTUP_TIMEOUT_MS);
     this.#startupTimer.unref?.();

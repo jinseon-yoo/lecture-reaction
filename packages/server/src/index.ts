@@ -215,12 +215,29 @@ httpServer.listen(PORT, HOST, () => {
       : '[lecture-react] student app not built yet (apps/student/dist missing)',
   );
 
-  // Normally the launcher asks for this when the professor decides the room
-  // needs it. `LECTURE_TUNNEL=1` is for running the server on its own —
-  // `pnpm dev:web`, a test, a room known in advance to be split.
-  if (process.env.LECTURE_TUNNEL === '1') {
-    console.log('[lecture-react] LECTURE_TUNNEL=1 — opening an outbound tunnel');
+  // Opened at boot, not on demand, and this is the default.
+  //
+  // "Everyone is on the same Wi-Fi" sounds like it should be the easy case,
+  // and it is the case this tool was originally built for. It is also the case
+  // that fails most often, because campus and guest access points routinely
+  // enable **client isolation**: every device gets internet, and no device can
+  // talk to any other device on the same SSID. The professor's laptop and the
+  // students' phones are then one hop apart and completely unable to reach
+  // each other, and nothing on this machine can tell that in advance — the LAN
+  // address is correct, pingable from the laptop itself, and dead from a seat.
+  //
+  // There is no way to negotiate around it either. The student's browser
+  // cannot probe the LAN address from a page served over the tunnel (mixed
+  // content), and cannot fall back to the tunnel from a LAN page that never
+  // loaded. Whichever address goes in the QR code is the only one the class
+  // gets. So it has to be the one that works on both kinds of network.
+  //
+  // Starting it here rather than when the professor clicks means it is
+  // negotiated and ready long before anyone looks at a QR code.
+  if (process.env.LECTURE_TUNNEL !== '0') {
     tunnel.start();
+  } else {
+    console.log('[lecture-react] LECTURE_TUNNEL=0 — local network only');
   }
 });
 

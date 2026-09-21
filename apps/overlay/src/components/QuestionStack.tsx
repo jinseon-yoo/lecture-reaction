@@ -47,11 +47,11 @@ export function QuestionStack() {
   return (
     <>
       <section
-        className="fixed right-4 top-4 bottom-24 z-20 flex flex-col justify-end items-stretch gap-2 w-[320px] max-w-[26vw]"
+        className="lr-question-stack"
         aria-label="Student questions"
       >
       {overflow > 0 && (
-        <div className="lr-panel-glass lr-pixel self-end px-2 py-1 text-[10px] text-[var(--lr-muted)]">
+        <div className="lr-panel-glass lr-pixel self-end px-2 py-1 text-[10px] text-(--lr-muted)">
           +{overflow} more
         </div>
       )}

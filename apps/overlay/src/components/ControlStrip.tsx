@@ -35,12 +35,74 @@ interface Point {
   y: number;
 }
 
+/** Only a fallback for measuring before the strip has laid out once. */
 const STRIP_SIZE = { width: 420, height: 44 };
 const LONG_PRESS_MS = 450;
 
-function defaultPosition(): Point {
-  // Bottom-left by default: the question stack owns the right edge.
-  return { x: 24, y: Math.max(24, window.innerHeight - STRIP_SIZE.height - 24) };
+type Corner = 'bottom-left' | 'bottom-right' | 'top-left' | 'top-right';
+
+/**
+ * Where the strip sits, stored as a **corner plus an inset** rather than as a
+ * screen coordinate.
+ *
+ * Absolute pixels were the bug. `{x: 24, y: 832}` is the bottom-left corner of
+ * a 900px-tall laptop screen and the middle of a 1080p projector, so a strip
+ * placed once in the office drifted into the slides the moment the machine met
+ * a different display — the one place the overlay must never be. Clamping it
+ * back into the viewport did not help: clamping keeps a panel on screen, it
+ * does not keep it in a corner.
+ *
+ * An anchor survives the change by construction. Bottom-left is bottom-left on
+ * a 1280x800 laptop, a 1920x1080 projector and a 4K panel, with no arithmetic
+ * that can round its way into the middle of the slide.
+ */
+interface Dock {
+  corner: Corner;
+  /** Extra px beyond the edge inset, so a dragged strip lands where it was dropped. */
+  dx: number;
+  dy: number;
+}
+
+/** Bottom-left by default: the question stack owns the right edge. */
+const DEFAULT_DOCK: Dock = { corner: 'bottom-left', dx: 0, dy: 0 };
+
+/**
+ * Mirrors `--lr-edge` in index.css — `clamp(12px, 1.4vw, 32px)`.
+ *
+ * Custom properties are not resolved by `getComputedStyle` unless registered,
+ * so the value is recomputed here rather than read back. Keep the two in step.
+ */
+function edgeInset(): number {
+  return Math.round(Math.min(32, Math.max(12, window.innerWidth * 0.014)));
+}
+
+/** Reads whatever is in storage, including the pre-anchor `{x, y}` shape. */
+function loadDock(): Dock {
+  const saved = readJson<Partial<Dock> & Partial<Point>>(
+    STORAGE_KEYS.stripPosition,
+    DEFAULT_DOCK,
+  );
+  if (typeof saved.corner === 'string') {
+    return {
+      corner: saved.corner,
+      dx: Number.isFinite(saved.dx) ? (saved.dx as number) : 0,
+      dy: Number.isFinite(saved.dy) ? (saved.dy as number) : 0,
+    };
+  }
+  // A position saved by an older build. It was chosen on some other screen and
+  // there is no way to tell which, so the corner it was nearest is the best
+  // available guess — and the default corner if it was nowhere near one.
+  if (typeof saved.x === 'number' && typeof saved.y === 'number') {
+    return { ...nearestCorner(saved.x, saved.y, STRIP_SIZE.width, STRIP_SIZE.height), dx: 0, dy: 0 };
+  }
+  return DEFAULT_DOCK;
+}
+
+/** The corner a strip at `(x, y)` is closest to, by its own centre. */
+function nearestCorner(x: number, y: number, w: number, h: number): { corner: Corner } {
+  const vertical = y + h / 2 < window.innerHeight / 2 ? 'top' : 'bottom';
+  const horizontal = x + w / 2 < window.innerWidth / 2 ? 'left' : 'right';
+  return { corner: `${vertical}-${horizontal}` as Corner };
 }
 
 export interface ControlStripProps {
@@ -75,9 +137,9 @@ export interface ControlStripProps {
 export function ControlStrip(props: ControlStripProps) {
   const { code, connection, settings, onSettingsChange } = props;
 
-  const [position, setPosition] = useState<Point>(() =>
-    readJson<Point>(STORAGE_KEYS.stripPosition, defaultPosition()),
-  );
+  const [dock, setDock] = useState<Dock>(loadDock);
+  /** Free screen coordinates while a drag is in flight; null the rest of the time. */
+  const [dragPos, setDragPos] = useState<Point | null>(null);
   const [collapsed, setCollapsed] = useState(() =>
     readJson<boolean>(STORAGE_KEYS.stripCollapsed, false),
   );
@@ -106,13 +168,25 @@ export function ControlStrip(props: ControlStripProps) {
   }, []);
 
   useEffect(() => {
-    // Also runs once on mount: a persisted position can be off-screen after
-    // the professor plugs into a different projector.
-    const onResize = () => setPosition((p) => clampToViewport(p));
+    // A resize needs no correction to the anchor itself — that is the whole
+    // point of storing a corner. It can still leave a *dragged* offset pushing
+    // the strip off the new screen, so only the offset is trimmed, and the
+    // corner the professor chose is never silently changed underneath them.
+    const onResize = () =>
+      setDock((d) => {
+        const rect = rootRef.current?.getBoundingClientRect();
+        const w = rect?.width ?? STRIP_SIZE.width;
+        const h = rect?.height ?? STRIP_SIZE.height;
+        const edge = edgeInset();
+        const maxDx = Math.max(0, window.innerWidth - w - edge * 2);
+        const maxDy = Math.max(0, window.innerHeight - h - edge * 2);
+        if (d.dx <= maxDx && d.dy <= maxDy) return d;
+        return { ...d, dx: Math.min(d.dx, maxDx), dy: Math.min(d.dy, maxDy) };
+      });
     onResize();
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
-  }, [clampToViewport]);
+  }, []);
 
   const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     // Grab the strip itself — never a control inside it.
@@ -126,14 +200,36 @@ export function ControlStrip(props: ControlStripProps) {
   const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
     const offset = dragOffset.current;
     if (!offset) return;
-    setPosition(clampToViewport({ x: event.clientX - offset.x, y: event.clientY - offset.y }));
+    // Free movement while the pointer is down; it is snapped to a corner on drop.
+    setDragPos(clampToViewport({ x: event.clientX - offset.x, y: event.clientY - offset.y }));
   };
 
   const endDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (!dragOffset.current) return;
     dragOffset.current = null;
     rootRef.current?.releasePointerCapture(event.pointerId);
-    writeJson(STORAGE_KEYS.stripPosition, position);
+
+    const dropped = dragPos;
+    setDragPos(null);
+    if (!dropped) return;
+
+    // Convert where it was dropped into an anchor, so the next screen the
+    // machine meets puts it back in the same corner rather than the same
+    // coordinate. Insets are measured from the two edges of that corner.
+    const rect = rootRef.current?.getBoundingClientRect();
+    const w = rect?.width ?? STRIP_SIZE.width;
+    const h = rect?.height ?? STRIP_SIZE.height;
+    const { corner } = nearestCorner(dropped.x, dropped.y, w, h);
+    const edge = edgeInset();
+    const fromLeft = dropped.x;
+    const fromTop = dropped.y;
+    const next: Dock = {
+      corner,
+      dx: Math.max(0, Math.round((corner.endsWith('left') ? fromLeft : window.innerWidth - fromLeft - w) - edge)),
+      dy: Math.max(0, Math.round((corner.startsWith('top') ? fromTop : window.innerHeight - fromTop - h) - edge)),
+    };
+    setDock(next);
+    writeJson(STORAGE_KEYS.stripPosition, next);
   };
 
   /* ---------------- collapse ---------------- */
@@ -183,10 +279,26 @@ export function ControlStrip(props: ControlStripProps) {
     <div
       ref={rootRef}
       data-lr-interactive="true"
-      className={`lr-panel-glass lr-interactive fixed z-40 flex items-center gap-2 px-2 py-1.5 cursor-grab active:cursor-grabbing ${
+      // Wraps rather than running off the edge: the strip is a row of controls
+      // whose width depends on the class code and the reaction set, and a
+      // narrow screen must fold it instead of pushing half of it off-screen.
+      className={`lr-panel-glass lr-interactive fixed z-40 flex flex-wrap items-center gap-2 px-2 py-1.5 max-w-[min(92vw,760px)] cursor-grab active:cursor-grabbing ${
         props.surge ? 'lr-surge' : ''
       }`}
-      style={{ left: position.x, top: position.y }}
+      style={
+        dragPos
+          ? { left: dragPos.x, top: dragPos.y }
+          : {
+              // `calc` off the shared edge token, so the strip keeps the same
+              // visual margin as every other panel on whatever screen it lands on.
+              left: dock.corner.endsWith('left') ? `calc(var(--lr-edge) + ${dock.dx}px)` : undefined,
+              right: dock.corner.endsWith('right') ? `calc(var(--lr-edge) + ${dock.dx}px)` : undefined,
+              top: dock.corner.startsWith('top') ? `calc(var(--lr-edge) + ${dock.dy}px)` : undefined,
+              bottom: dock.corner.startsWith('bottom')
+                ? `calc(var(--lr-edge) + ${dock.dy}px)`
+                : undefined,
+            }
+      }
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={endDrag}
@@ -232,7 +344,7 @@ export function ControlStrip(props: ControlStripProps) {
           </button>
 
           {settings.quiet && (
-            <span className="lr-pixel text-[10px] text-[var(--lr-muted)] whitespace-nowrap">
+            <span className="lr-pixel text-[10px] text-(--lr-muted) whitespace-nowrap">
               reactions hidden · {props.hiddenReactionCount}
             </span>
           )}
@@ -271,7 +383,7 @@ export function ControlStrip(props: ControlStripProps) {
 
           {props.surge && (
             <span
-              className="lr-pixel flex items-center gap-1.5 whitespace-nowrap rounded-[3px] border-2 border-[var(--lr-dark)] px-1.5 py-1 text-[10px]"
+              className="lr-pixel flex items-center gap-1.5 whitespace-nowrap rounded-[3px] border-2 border-(--lr-dark) px-1.5 py-1 text-[10px]"
               style={{ background: `var(--lr-${REACTION_META[props.surge].accent})` }}
               role="status"
             >
@@ -323,7 +435,7 @@ export function ControlStrip(props: ControlStripProps) {
 function ConnectionDot({ reconnecting }: { reconnecting: boolean }) {
   if (reconnecting) {
     return (
-      <span className="lr-pixel text-[10px] text-[var(--lr-muted)] flex items-center gap-1.5">
+      <span className="lr-pixel text-[10px] text-(--lr-muted) flex items-center gap-1.5">
         <span className="lr-loader">
           <i />
           <i />
@@ -335,7 +447,7 @@ function ConnectionDot({ reconnecting }: { reconnecting: boolean }) {
   }
   return (
     <span
-      className="w-[8px] h-[8px] border-2 border-[var(--lr-dark)]"
+      className="w-2 h-2 border-2 border-(--lr-dark)"
       style={{ background: 'var(--lr-mint)' }}
       title="Connected"
       aria-label="Connected"
@@ -364,7 +476,7 @@ function SettingsPopover({
 
   return (
     <Popup>
-      <p className="lr-pixel text-[10px] tracking-[0.1em] mb-1.5">REACTION POSITION</p>
+      <p className="lr-pixel text-[10px] tracking-widest mb-1.5">REACTION POSITION</p>
       <div className="flex gap-3 mb-2">
         {zones.map((zone) => (
           <label key={zone.value} className="lr-text text-[12px] flex items-center gap-1.5">
@@ -396,7 +508,7 @@ function SettingsPopover({
           launcher is hidden, and the professor should not have to dig it out
           to re-share the link. */}
       <div className="lr-rule my-2" />
-      <p className="lr-pixel text-[10px] tracking-[0.1em] mb-1.5">SHARE WITH CLASS</p>
+      <p className="lr-pixel text-[10px] tracking-widest mb-1.5">SHARE WITH CLASS</p>
       <div className="flex gap-2">
         <button
           type="button"
@@ -459,7 +571,7 @@ function EndClassPopover({
 }) {
   return (
     <Popup>
-      <p className="lr-text text-[12px] leading-snug mb-2 max-w-[240px]">
+      <p className="lr-text text-[12px] leading-snug mb-2 max-w-60">
         End this class? Students will no longer be able to send reactions or questions.
       </p>
       <div className="flex gap-2 justify-end">

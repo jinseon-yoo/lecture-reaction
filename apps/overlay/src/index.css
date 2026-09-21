@@ -36,6 +36,59 @@ html.lr-role-overlay #root {
   overflow: hidden;
 }
 
+/* ---------- overlay layout scale ----------------------------------- */
+/*
+ * Every overlay panel is sized and placed from the window it is drawn in,
+ * never from a pixel count chosen on one machine. The overlay covers a whole
+ * screen, and that screen is a 13" laptop panel in the office and a 1080p or
+ * 4K projector in the hall — a panel hard-coded to 320px is a third of the
+ * width in one and a thumbnail in the other.
+ *
+ * `clamp()` gives all three at once: a floor so the text stays legible on a
+ * small screen, a viewport-relative middle so the panels grow with the
+ * projector, and a ceiling so a 4K display does not hand the questions half
+ * the wall. Panels reference these and nothing else.
+ */
+html.lr-role-overlay {
+  /* Breathing room from the physical edge of the screen. */
+  --lr-edge: clamp(12px, 1.4vw, 32px);
+  /* Side panels: the question stack, the compact poll panel. */
+  --lr-panel-w: clamp(200px, 22vw, 380px);
+  /* How far up the screen the question stack may grow before it stops. */
+  --lr-stack-max-h: 62vh;
+}
+
+/* ---------- question stack ----------------------------------------- */
+/*
+ * Pinned to the bottom-right corner and grown upward. The professor's slide
+ * content is in the middle of the screen, so the stack must never start there
+ * and drift inward: it is anchored to two edges and only ever extends along
+ * one of them.
+ */
+.lr-question-stack {
+  position: fixed;
+  right: var(--lr-edge);
+  bottom: var(--lr-edge);
+  width: var(--lr-panel-w);
+  max-height: var(--lr-stack-max-h);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: stretch;
+  gap: 8px;
+  z-index: 20;
+}
+
+/* ---------- compact poll panel ------------------------------------- */
+/* The opposite corner from the stack, directly above the control strip. */
+.lr-poll-compact {
+  position: fixed;
+  left: var(--lr-edge);
+  width: var(--lr-panel-w);
+  z-index: 30;
+  transition: bottom 200ms ease;
+}
+
 .lr-interactive {
   pointer-events: auto;
 }

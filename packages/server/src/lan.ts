@@ -57,15 +57,39 @@ const VIRTUAL_PREFIXES = [
  */
 const PHYSICAL_PATTERNS: [RegExp, number, string][] = [
   // Windows friendly names
-  [/^wi-?fi/i, 40, 'Wi-Fi adapter'],
-  [/^(wireless|wlan)/i, 38, 'wireless adapter'],
-  [/^ethernet/i, 28, 'ethernet adapter'],
+  [/^wi-?fi/i, 44, 'Wi-Fi adapter'],
+  [/^(wireless|wlan)/i, 42, 'wireless adapter'],
   // macOS
   [/^en0$/i, 40, 'primary interface'],
+  /*
+   * A USB Wi-Fi dongle, named by its product rather than its function.
+   *
+   * Windows reports a plug-in adapter under whatever string the driver ships:
+   * "TP-Link Wireless USB Adapter", "Realtek 8812BU Wireless LAN 802.11ac USB
+   * NIC", "ASUS USB-AC68". None of those *start* with "Wi-Fi", so the anchored
+   * patterns above score them zero — and a desktop with a built-in Ethernet
+   * port then hands the class the wired address, which is the one adapter in
+   * the machine that is not on the students' network. Matching the keyword
+   * anywhere in the name is what stops a lecture-room dongle losing to the
+   * socket in the wall.
+   */
+  [/(wi-?fi|wireless|wlan|802\.11)/i, 39, 'wireless adapter (named by product)'],
   // Linux predictable names: wlp2s0 (wireless), enp0s3 / eno1 (wired)
   [/^wl\w+$/i, 38, 'wireless interface'],
   [/^(en|eth)\d+$/i, 30, 'wired/wireless interface'],
   [/^(enp|eno|ens)\w+$/i, 28, 'wired interface'],
+  /*
+   * Wired comes last, below every wireless match, and that ordering is a
+   * judgement rather than a technicality.
+   *
+   * The two mistakes are not equally bad. Students are on Wi-Fi essentially
+   * always. Picking Wi-Fi when the Ethernet port would also have worked costs
+   * a few milliseconds; picking Ethernet when it is a separate staff VLAN —
+   * the normal campus arrangement — costs the whole class, silently, with an
+   * address that pings fine from the lectern. So when a machine offers both,
+   * the radio the students share wins.
+   */
+  [/^ethernet/i, 26, 'ethernet adapter'],
 ];
 
 function isPrivateLan(ip: string): boolean {

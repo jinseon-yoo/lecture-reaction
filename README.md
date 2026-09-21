@@ -28,12 +28,11 @@ has not been uploaded; maintainers can use the [release instructions](#publish-a
    and `portable.txt` beside it.
 3. Connect the presentation computer and students to the same reachable network.
    When Windows Firewall asks, tick **both Private and Public** and allow access.
-4. Start a class and share its QR code or join link. If students scan it and the
-   page will not load, see [Students scan the QR and nothing
-   loads](#students-scan-the-qr-and-nothing-loads). If the PC is on the school's
-   wired network and students are on a Wi-Fi that cannot reach it, press
-   **Students On Another Network** in the launcher — see [When the lectern and
-   the seats are on different networks](#when-the-lectern-and-the-seats-are-on-different-networks).
+4. Start a class and share its QR code or join link. The address is an internet
+   address by default, so it works from any network the phones are on — see
+   [why](#why-the-join-address-is-an-internet-address-by-default). If students
+   scan it and the page will not load, see [Students scan the QR and nothing
+   loads](#students-scan-the-qr-and-nothing-loads).
 5. Quit the app before safely ejecting the USB drive.
 
 Requires **64-bit Windows 10/11** and
@@ -477,11 +476,10 @@ pnpm desktop
 
 Two things start: the realtime server, and a small **launcher** window.
 
-Get on the **same Wi-Fi the students will use** before you show anyone the code. The
-address students need comes from that network, and it is the one thing that will
-quietly ruin a class if it is wrong. If you *cannot* — the lectern is on a wired
-staff network, the students on a guest Wi-Fi — test **Students On Another
-Network** with one phone before the class; see [below](#when-the-lectern-and-the-seats-are-on-different-networks).
+The launcher hands out an internet address by default, so students join from any
+network and you do not have to know whether the room's Wi-Fi allows devices to
+reach each other — see [why](#why-the-join-address-is-an-internet-address-by-default).
+It needs a few seconds at startup; the QR appears once the address is settled.
 
 ### Starting the class
 
@@ -637,46 +635,57 @@ Work down this list; it is roughly in order of likelihood.
    nothing can reach the server. System Settings -> Network -> Firewall.
 3. **Is the address the right one?** Check the boot log against the list above. If
    the chosen line is a `bridge`/`vmnet`/`utun` interface, use `LECTURE_LAN_IP`.
-4. **The two sides cannot route to each other.** Client isolation on a guest
-   Wi-Fi, or the lectern on staff Ethernet and the students on a separate
-   student SSID. No address is the right address here, because there is no path.
-   Press **Students On Another Network** — the next section — and
-   **test it with one phone before you rely on it in front of a class.**
+4. **The two sides cannot route to each other.** Client isolation on the room's
+   Wi-Fi, or the lectern on staff Ethernet and the students on a separate SSID.
+   No local address is the right address here, because there is no path. This is
+   why the join address is an internet address by default — see the next
+   section. If you switched to **Use This Wi-Fi Instead**, switch back.
 
-### When the lectern and the seats are on different networks
+### Why the join address is an internet address by default
 
-A lot of campuses wire the lectern into a staff VLAN and put students on a guest
-or student SSID that is deliberately routed away from it. Every address the
-launcher can offer is then correct and unreachable at the same time, and no
-firewall rule on the laptop changes that.
+Everyone being on the same Wi-Fi sounds like the easy case. It is the case that
+fails most often.
 
-**Students On Another Network**, in the launcher under the share buttons, stops
-needing a path in. It starts a bundled `cloudflared` client that dials *out*
-from your machine to Cloudflare's edge and hands you a public
-`https://<random>.trycloudflare.com` address; students reach that, and it is
-proxied back down the same outbound connection. Both sides only ever make
-outbound connections, which is the one thing every campus network permits.
+Campus and guest access points routinely enable **client isolation**: every
+device gets internet, and no device can talk to any other device on the same
+SSID. Your laptop and a student's phone are then one hop apart and completely
+unable to reach each other. The LAN address the app derives is correct, it
+answers from the lectern, and it is dead from every seat in the room — and
+nothing running on your machine can detect that in advance.
 
-What changes when it is on:
+So the app does not try to guess. At startup it opens an *outbound* connection
+from your machine to Cloudflare's edge using a bundled `cloudflared`, and hands
+out a public `https://<random>.trycloudflare.com` address. Students reach that;
+it is proxied back down the same connection. Nobody has to reach your computer,
+so it works whether or not the access point allows it.
 
-- The QR code, **Copy Link**, and the overlay's gear menu all switch to the
-  public address. The class code is unchanged; it is still what admits students.
-- The student page is served over `https`, so the socket is `wss`. Nothing to
-  configure — the app picks it up from the page's own origin.
+There is no way to negotiate this per student, either. A page served over the
+tunnel cannot probe the LAN address (mixed content), and a LAN page that never
+loaded cannot fall back to anything. Whichever address goes in the QR code is
+the only one the class gets, so it has to be the one that works on both kinds
+of network.
+
+What that costs:
+
 - Reactions round-trip through a Cloudflare edge instead of the room's switch:
-  tens of milliseconds rather than single digits. Noticeable if you look for
-  it, not if you are lecturing.
+  tens of milliseconds rather than single digits. Invisible in a reaction that
+  floats for three seconds.
 - Question text transits Cloudflare. Nothing is stored there, but it is no
   longer true that the data never leaves the building.
-- The address is random and changes every time the tunnel starts. A link
-  pasted into the LMS last week is dead this week; share it per class.
+- The address is random and changes every time the app starts. Share it per
+  class; a link pasted into the LMS last week is dead this week.
+- It needs internet on your machine and on the phones, and a few seconds to come
+  up. The launcher holds the QR back until it is ready rather than showing one
+  address and then swapping it. Quick tunnels are free and unauthenticated,
+  which also means best-effort with no SLA — Cloudflare says as much.
 
-What it needs: **internet access on your machine and on the phones**, and a
-few seconds to come up (the launcher shows a spinner and the QR redraws
-itself). It needs no account, no hosting and costs nothing — quick tunnels are
-free and unauthenticated, which also means they are best-effort with no SLA.
-Cloudflare itself says as much. It is a fallback the professor turns on, not
-the default, for exactly that reason.
+**Use This Wi-Fi Instead**, under the share buttons, switches to the local
+address: faster, and the traffic stays in the building. Worth having when you
+have tested that a phone on the room's Wi-Fi can actually load the page. If the
+tunnel cannot start at all (no internet), the app falls back to the local
+address on its own and says so.
+
+`LECTURE_TUNNEL=0` starts the server local-only and never opens a tunnel.
 
 While the tunnel is up the professor's own control surface — `/api/join-url`,
 `/api/tunnel`, and the `role=professor` socket — refuses anything that arrived
@@ -688,6 +697,21 @@ prefers QUIC on `udp/7844` and falls back to HTTP/2 only after a timeout. Set
 `LECTURE_TUNNEL_PROTOCOL=http2` to skip straight to the fallback. A machine
 that already has `cloudflared` installed can point at it with
 `LECTURE_CLOUDFLARED=/path/to/cloudflared`.
+
+### If you are on a USB Wi-Fi adapter
+
+A fixed classroom PC is often wired into a staff network students cannot reach,
+with a USB dongle providing the Wi-Fi. That matters only for the local address,
+but it used to get it wrong: Windows names a plug-in adapter after its product
+(`TP-Link Wireless USB Adapter`, `Realtek 8812BU Wireless LAN 802.11ac USB NIC`),
+none of which start with "Wi-Fi", so the built-in Ethernet port scored higher and
+the class was handed the one address in the machine that could not work.
+
+Adapters are now matched on the wireless keyword anywhere in the name, and
+wireless outranks wired whenever a machine offers both. The two mistakes are not
+symmetrical: preferring Wi-Fi when Ethernet would also have worked costs a few
+milliseconds, while preferring Ethernet when it is a separate VLAN costs the
+whole class. `LECTURE_LAN_IP` still overrides everything.
 
 ## Platform support
 
@@ -833,13 +857,13 @@ while the stick was `E:` silently stops applying the first time it mounts as
 `F:`. Scoping to the port is what makes the fix survive moving between rooms and
 machines.
 
-If the rule is in place and phones still cannot connect, the network itself is
-the problem. Many campus and guest Wi-Fi networks enable **client isolation**,
-or keep the lectern's Ethernet and the student Wi-Fi apart entirely, which
-blocks phone-to-laptop traffic regardless of any firewall rule. Press **Students
-On Another Network** in the launcher; see [When the lectern and the seats are on
-different networks](#when-the-lectern-and-the-seats-are-on-different-networks).
-Check `LECTURE_LAN_IP` too if the address in the QR is not the adapter you expect.
+All of that applies only to the **local** address. The default join address is an
+internet address that needs no inbound connection and no firewall rule at all —
+see [why](#why-the-join-address-is-an-internet-address-by-default). If phones
+cannot connect and you had switched to **Use This Wi-Fi Instead**, switch back
+first: many campus networks enable **client isolation**, which blocks
+phone-to-laptop traffic regardless of any firewall rule. Check `LECTURE_LAN_IP`
+too if the local address is not the adapter you expect.
 
 ## Publish a GitHub release without Actions
 
