@@ -8,7 +8,7 @@ The professor runs a click-through desktop window on top of PowerPoint, Keynote,
 browser, an IDE — anything. Students open a URL on their phone/ipad/laptop, type a 5-character class code,
 and tap: *understand*, *confused*, *too fast*, *again*, *interesting*, *love it* — plus
 *can't see* and *can't hear* for when the projector washes out or the mic is off. Reactions
-float up over the slides. Questions stack as compact bubbles down the right edge, sorted by
+float up over the slides. Questions stack as compact bubbles in the bottom-right corner, sorted by
 votes; the professor clears them with a checkmark and can fire a one-click understanding check,
 then blow the result up in the middle of the screen for the whole room to read.
 
@@ -26,8 +26,9 @@ has not been uploaded; maintainers can use the [release instructions](#publish-a
    writable USB drive. Do not run the app from inside the ZIP preview.
 2. Open **Lecture React.exe**. Keep `lr-server.exe`, `cloudflared.exe`, `student/`,
    and `portable.txt` beside it.
-3. Connect the presentation computer and students to the same reachable network.
-   When Windows Firewall asks, tick **both Private and Public** and allow access.
+3. Give the computer internet access — wired Ethernet is fine, and students do
+   **not** have to be on the same network as it. If Windows Firewall asks, allowing
+   it does no harm, but the default join address does not need it.
 4. Start a class and share its QR code or join link. The address is an internet
    address by default, so it works from any network the phones are on — see
    [why](#why-the-join-address-is-an-internet-address-by-default). If students
@@ -49,10 +50,15 @@ and the PowerPoint overlay still need testing.
 
 ### Windows testing checklist
 
-- Open the app, start a class, and join from a phone on the same network.
-- Press **Students On Another Network**, wait for the QR to change to an
-  `https://….trycloudflare.com` address, and join from a phone on **cellular
-  data** (Wi-Fi off). This is the path a split campus network forces.
+- Open the app and start a class. Wait for the QR to appear — it is held back for
+  a few seconds while the join address is negotiated — and check it is an
+  `https://….trycloudflare.com` address.
+- Join from a phone on **cellular data**, Wi-Fi off. That is the same shape as a
+  student's phone on a network the PC cannot reach, and it is the one test that
+  proves the address gets out of the building.
+- Then press **Use This Wi-Fi Instead** and join from a phone on the same network
+  as the PC. If that fails, the network isolates its clients and the default is
+  doing real work; switch back.
 - Send reactions and questions, vote on a question, and resolve it in the overlay.
 - Run a PowerPoint slideshow and check visibility and click-through outside the
   app controls. `Ctrl+Shift+L` toggles Interaction Mode.
@@ -83,7 +89,8 @@ the presentation Mac.
 3. **Right-click → Open no longer works for this.** Apple removed that bypass in
    macOS 15. If you already tried to open the app and macOS refused, use System
    Settings → Privacy & Security → **Open Anyway**, near the bottom of the page.
-4. Allow incoming connections when macOS asks — students connect to this Mac.
+4. If macOS asks to allow incoming connections, allowing it does no harm — but the
+   default join address does not need it. The Mac only needs internet access.
 5. Start a class and share its QR code or join link. Students scan it and then type
    the class code; the link by itself does not admit anyone.
 
@@ -122,7 +129,9 @@ end when the app closes.
    ^ reactions rise from the bottom band (Left / Both are options)
      the right-hand strip is reserved for questions
      a surge highlights the strip and names itself -----^
-     the class code and controls sit in the corner
+     controls sit in the bottom-left corner, questions in the bottom-right;
+     both are anchored to those corners, so they stay there on a laptop
+     panel, a 1080p projector and a 4K display alike
 ```
 
 Everything you see is drawn on a transparent, always-on-top window. Clicks pass straight through
@@ -432,6 +441,29 @@ Also not verified: a full class session through the packaged `.app`, Windows
 runtime behaviour, and native Linux builds/runtime. The Windows x64 portable
 release has been cross-built and its ZIP checked; see the portable build details below.
 
+Network and layout checks on 2026-09-21 (Apple Silicon macOS, v1.1.1):
+
+- The outbound tunnel was exercised end to end against a real Cloudflare quick
+  tunnel: a student joined over `wss://….trycloudflare.com`, the reaction ack
+  returned in ~20 ms, a question reached the professor, and ending the class
+  reached the student. A `role=professor` upgrade attempted *through* the tunnel
+  was refused, as were `/api/join-url` and `/api/tunnel`.
+- Stopping and restarting the tunnel worked, and `SIGTERM` to the server left no
+  orphaned `cloudflared` process.
+- The server was booted with no interaction and the launcher handed out the
+  `trycloudflare` address by itself, confirming the default path needs no clicks.
+- Address ranking passes seven synthetic interface tables
+  (`pnpm -F @lr/server test:lan`), including two classroom PCs with a
+  vendor-named USB Wi-Fi dongle alongside wired Ethernet.
+- Overlay panels were measured in a browser at 1024x640, 1280x800, 1920x1080 and
+  3840x2160: the control strip within 32px of the bottom-left corner and the
+  question stack within 32px of the bottom-right at every size, stack width
+  scaling 225px to 380px, and no horizontal overflow.
+
+Not verified in that pass: the layout inside the **packaged** desktop app rather
+than a browser, and the overlay's monitor-following behaviour against a real
+projector. Both compile and are reasoned; neither has been watched on hardware.
+
 ## Keyboard shortcuts
 
 | Shortcut | Effect |
@@ -582,30 +614,32 @@ enforced by a single `toProfessorView` boundary on the server.
 
 ## Getting students in
 
-Students open the server's address on a phone or a laptop — any device, any OS, any
-browser. No app, no account, no name. The server binds all interfaces, so anything on
-the same network can reach it.
+Students open the join address on a phone or a laptop — any device, any OS, any
+browser. No app, no account, no name. By default that address is a public one this
+computer opens on its way out to the internet, so students join from whatever network
+they happen to be on — see [why](#why-the-join-address-is-an-internet-address-by-default).
 
 Three ways to hand it out. The QR and the link reach the join form; the code is what admits them:
 
 | | Best for |
 | --- | --- |
 | **Show QR** | A hall full of phones. Put it on the projector; students scan, then type the code. |
-| **Copy Link** | Laptops. Pastes `http://<address>:8787/` into your LMS, a chat or an email. |
+| **Copy Link** | Laptops. Pastes the join address into your LMS, a chat or an email. It changes each time the app starts, so send it per class. |
 | **Copy Code** | When you are sharing the address some other way. |
 
 All three live in the launcher, and Copy Link / Show QR are also in the overlay's gear
 menu for latecomers.
 
-The server **re-derives that address on every request**, so it tracks your
-environment rather than being fixed at startup. Join the lecture hall Wi-Fi after
-launching the app and the QR updates on its own within ten seconds — the launcher
-re-asks continuously and also refreshes immediately on any network change.
+The launcher **re-asks for that address continuously**, so it tracks your environment
+rather than being fixed at startup, and refreshes immediately on any network change.
+While the address is still being decided at startup the QR is held back rather than
+shown and then swapped — a swapped QR strands whoever scanned it first.
 
-### Choosing the right address is not trivial
+### Choosing the right local address is not trivial
 
-A teaching laptop usually has several addresses and only one of them is reachable
-from a phone in the room. On the machine this was developed on:
+This applies only to **Use This Wi-Fi Instead**. A teaching laptop usually has
+several addresses and only one of them is reachable from a phone in the room. On the
+machine this was developed on:
 
 ```
 en0        10.103.85.46     real Wi-Fi          <- the one students need
@@ -627,19 +661,23 @@ LECTURE_LAN_IP=192.168.1.42 pnpm desktop
 
 ### When students cannot connect
 
-Work down this list; it is roughly in order of likelihood.
+**First, check which address you are handing out.** If it starts with `https://` and
+ends in `trycloudflare.com`, skip to item 4 — items 1 to 3 are about the local
+address and cannot be the problem.
 
-1. **Are they on the same Wi-Fi?** Cellular data cannot reach your laptop. This is
-   almost always the answer.
-2. **Did macOS ask to allow incoming connections?** If you dismissed that prompt,
-   nothing can reach the server. System Settings -> Network -> Firewall.
-3. **Is the address the right one?** Check the boot log against the list above. If
-   the chosen line is a `bridge`/`vmnet`/`utun` interface, use `LECTURE_LAN_IP`.
-4. **The two sides cannot route to each other.** Client isolation on the room's
-   Wi-Fi, or the lectern on staff Ethernet and the students on a separate SSID.
-   No local address is the right address here, because there is no path. This is
-   why the join address is an internet address by default — see the next
-   section. If you switched to **Use This Wi-Fi Instead**, switch back.
+1. **Are they on the same Wi-Fi?** *(local address only)* Cellular data cannot reach
+   your computer on the local path.
+2. **Did the firewall prompt get dismissed?** *(local address only)* macOS: System
+   Settings -> Network -> Firewall. Windows: the launcher offers **Allow Students
+   Through** when the rule is missing.
+3. **Is the address the right one?** *(local address only)* Check the boot log
+   against the list above. If the chosen line is a `bridge`/`vmnet`/`utun`
+   interface, use `LECTURE_LAN_IP`.
+4. **Is the QR still being prepared?** The launcher holds it back for a few seconds
+   at startup while it negotiates the join address, and shows a spinner meanwhile.
+5. **Did the tunnel fail to start?** The launcher says so under the toggle, and
+   falls back to the local address on its own. Usually the network is dropping QUIC
+   on `udp/7844`; set `LECTURE_TUNNEL_PROTOCOL=http2` and restart.
 
 ### Why the join address is an internet address by default
 
@@ -698,20 +736,33 @@ prefers QUIC on `udp/7844` and falls back to HTTP/2 only after a timeout. Set
 that already has `cloudflared` installed can point at it with
 `LECTURE_CLOUDFLARED=/path/to/cloudflared`.
 
-### If you are on a USB Wi-Fi adapter
+### Fixed classroom PCs
 
-A fixed classroom PC is often wired into a staff network students cannot reach,
-with a USB dongle providing the Wi-Fi. That matters only for the local address,
-but it used to get it wrong: Windows names a plug-in adapter after its product
-(`TP-Link Wireless USB Adapter`, `Realtek 8812BU Wireless LAN 802.11ac USB NIC`),
-none of which start with "Wi-Fi", so the built-in Ethernet port scored higher and
-the class was handed the one address in the machine that could not work.
+**Ethernet only, no Wi-Fi hardware.** This works, and needs nothing extra. The
+tunnel only needs an *outbound* connection, and it does not care which interface
+carries it: the PC goes out over its wired network, the phones go out over school
+Wi-Fi, and the two meet at Cloudflare. Neither side ever has to reach the other, so
+a Wi-Fi adapter is not required.
 
-Adapters are now matched on the wireless keyword anywhere in the name, and
-wireless outranks wired whenever a machine offers both. The two mistakes are not
-symmetrical: preferring Wi-Fi when Ethernet would also have worked costs a few
-milliseconds, while preferring Ethernet when it is a separate VLAN costs the
-whole class. `LECTURE_LAN_IP` still overrides everything.
+What such a machine does not have is a local fallback — without Wi-Fi hardware it
+can never join the students' network, so **Use This Wi-Fi Instead** only helps if
+the school happens to route between its wired and wireless networks. That is worth
+testing once, because it is the faster path when it works, but do not count on it.
+The one situation that would genuinely need a USB adapter is the tunnel being
+blocked outbound *and* wired-to-wireless not routing. Test with a phone on cellular
+data before the class and you will know which situation you are in.
+
+**With a USB Wi-Fi dongle.** That matters only for the local address, and it used to
+get it wrong: Windows names a plug-in adapter after its product (`TP-Link Wireless
+USB Adapter`, `Realtek 8812BU Wireless LAN 802.11ac USB NIC`), none of which start
+with "Wi-Fi", so the built-in Ethernet port scored higher and the class was handed
+the one address in the machine that could not work.
+
+Adapters are now matched on the wireless keyword anywhere in the name, and wireless
+outranks wired whenever a machine offers both. The two mistakes are not symmetrical:
+preferring Wi-Fi when Ethernet would also have worked costs a few milliseconds,
+while preferring Ethernet when it is a separate VLAN costs the whole class.
+`LECTURE_LAN_IP` still overrides everything.
 
 ## Platform support
 
@@ -734,8 +785,10 @@ detail, `Cmd` versus `Ctrl`, is `cfg`-gated, and `icon.ico` is generated. You ne
 the MSVC build tools and WebView2 (see [Prerequisites](#prerequisites)), then
 `pnpm desktop`. The behaviour to check first is a **PowerPoint slideshow**: it takes
 a topmost fullscreen window, which is exactly the thing most likely to sit above the
-overlay. Presenter View on a second monitor is the usual workaround, and the overlay
-does not yet choose which monitor it covers.
+overlay. Presenter View on a second monitor is the usual workaround. The overlay
+covers the primary monitor and re-reads that rectangle continuously, so plugging in a
+projector or changing resolution mid-lecture is picked up within about a second — but
+it still does not let you *choose* which monitor it covers.
 
 **Linux.** Wayland is the open question. Click-through there is a compositor-level
 input-region concept rather than a window flag, so `set_ignore_cursor_events` may
@@ -760,6 +813,10 @@ for a lecture.
 | Rust build fails with `failed to open icon` | The icon set is missing. `pnpm icon`. Tauri reads `icons/32x32.png` at compile time, so this surfaces as a Rust error rather than an asset one. |
 | Students see `Can't reach the server. Still trying...` | The server is not reachable from their phone — work through [When students cannot connect](#when-students-cannot-connect). |
 | Overlay swallows clicks | `CmdOrCtrl+Shift+L` toggles Interaction Mode off. |
+| No QR yet, just a spinner | The join address is still being negotiated; it takes a few seconds at startup. It is held back deliberately rather than shown and then swapped. If it never settles, the tunnel failed — the launcher says so and falls back to the local address. |
+| The overlay is drawing on the wrong screen | It covers the primary monitor and re-checks about once a second, so this should self-correct. Before v1.1.1 the rectangle was read once at launch and plugging in a projector afterwards left it covering the old one — which looks exactly like transparency being broken. |
+| Controls or questions sit over the slides | Fixed in v1.1.1: panels are anchored to the bottom-left and bottom-right corners and sized from the display. A control strip dragged in an earlier version stored an absolute coordinate; it is migrated to the nearest corner on first run. |
+| The launcher warns about Windows Firewall | Only shown while the **local** address is in use. The default address dials out and needs no inbound rule, so if you see this and have not switched paths, you are on the local one. |
 
 ## Docs
 
