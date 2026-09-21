@@ -316,11 +316,16 @@ export function Launcher() {
             </button>
           )}
 
-          {firewall.supported && !firewall.allowed && (
+          {/* Only while the local address is the one being handed out. The
+              firewall rule governs *inbound* connections, and the default join
+              address needs none — the tunnel dials out. Warning about it
+              anyway sends a professor chasing a UAC prompt, on a machine they
+              may not have rights to, to fix something that is not broken. */}
+          {firewall.supported && !firewall.allowed && tunnel.status !== 'up' && (
             <div className="flex max-w-[300px] flex-col items-center gap-1.5">
               <p className="lr-text text-center text-[10px] text-(--lr-muted)">
-                Windows Firewall is blocking student connections. Scanning the QR will
-                time out until it is allowed.
+                Windows Firewall is blocking student connections to this computer.
+                The local address will time out until it is allowed.
               </p>
               <button
                 type="button"
