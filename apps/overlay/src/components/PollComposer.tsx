@@ -31,7 +31,7 @@ export function PollComposer({
 
       <input
         data-lr-interactive="true"
-        className="lr-interactive lr-text w-[240px] text-[12px] px-2 py-1 mb-1.5 border-2 border-(--lr-dark) rounded-[3px] bg-[var(--lr-surface)]"
+        className="lr-interactive lr-text w-60 text-[12px] px-2 py-1 mb-1.5 border-2 border-(--lr-dark) rounded-[3px] bg-(--lr-surface)"
         placeholder="Question"
         value={question}
         maxLength={120}
@@ -43,7 +43,7 @@ export function PollComposer({
         <input
           key={index}
           data-lr-interactive="true"
-          className="lr-interactive lr-text w-[240px] text-[12px] px-2 py-1 mb-1 border-2 border-(--lr-dark) rounded-[3px] bg-[var(--lr-surface)]"
+          className="lr-interactive lr-text w-60 text-[12px] px-2 py-1 mb-1 border-2 border-(--lr-dark) rounded-[3px] bg-(--lr-surface)"
           placeholder={`Option ${index + 1}`}
           value={option}
           maxLength={40}

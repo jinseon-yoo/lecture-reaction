@@ -42,7 +42,7 @@ export function QrCanvas({ value, size = 240 }: { value: string; size?: number }
       />
       {/* Readable on purpose: a phone that will not scan can be handed this to
           type, and it is the first thing to check when nobody can connect. */}
-      <span className="lr-text text-[12px] break-all text-center max-w-[260px]">
+      <span className="lr-text text-[12px] break-all text-center max-w-65">
         {failed ? 'QR unavailable — type the URL' : value}
       </span>
     </div>

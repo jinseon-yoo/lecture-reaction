@@ -292,7 +292,7 @@ export function Launcher() {
               {/* Shown so it is obvious what "Copy Link" put on the clipboard,
                   and so the address can be read out if someone cannot scan. */}
               {shareUrl && (
-                <p className="lr-text max-w-[300px] break-all text-[10px] text-(--lr-muted)">
+                <p className="lr-text max-w-75 break-all text-[10px] text-(--lr-muted)">
                   {shareUrl}
                 </p>
               )}
@@ -322,7 +322,7 @@ export function Launcher() {
               anyway sends a professor chasing a UAC prompt, on a machine they
               may not have rights to, to fix something that is not broken. */}
           {firewall.supported && !firewall.allowed && tunnel.status !== 'up' && (
-            <div className="flex max-w-[300px] flex-col items-center gap-1.5">
+            <div className="flex max-w-75 flex-col items-center gap-1.5">
               <p className="lr-text text-center text-[10px] text-(--lr-muted)">
                 Windows Firewall is blocking student connections to this computer.
                 The local address will time out until it is allowed.
@@ -349,7 +349,7 @@ export function Launcher() {
               address that works either way is the default, and the local one —
               faster, and it keeps the traffic in the building — is the choice
               the professor makes when they know the network allows it. */}
-          <div className="flex max-w-[300px] flex-col items-center gap-1.5">
+          <div className="flex max-w-75 flex-col items-center gap-1.5">
             <button
               type="button"
               className="lr-btn"
@@ -360,7 +360,7 @@ export function Launcher() {
               {tunnelOn ? 'Use This Wi-Fi Instead' : 'Use Any Network'}
             </button>
 
-            <p className="lr-text max-w-[300px] text-center text-[10px] text-(--lr-muted)">
+            <p className="lr-text max-w-75 text-center text-[10px] text-(--lr-muted)">
               {tunnel.status === 'up'
                 ? 'Students join over the internet, so a phone works whether or not this Wi-Fi lets devices see each other. Switch to this Wi-Fi only if you have tested that a phone on it can load the page.'
                 : tunnel.status === 'failed'
