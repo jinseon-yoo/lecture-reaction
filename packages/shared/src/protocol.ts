@@ -208,9 +208,19 @@ export const LIMITS = {
   overlayMaxQuestions: 5,
   /** A resolved question lingers this long before it is dropped. */
   resolveFadeMs: 600,
-  /** Floating reaction lifetime on the overlay. */
-  reactionFloatMinMs: 3000,
-  reactionFloatMaxMs: 5000,
+  /**
+   * Floating reaction lifetime on the overlay.
+   *
+   * A reaction is glanced at, not read: the professor is mid-sentence and
+   * catches it peripherally. At 3-5s a chip that appeared while they were
+   * turned toward the board was gone before they turned back, so the signal
+   * was sent and never received. These are the dwell times, and `lr-float-up`
+   * is timed against them — its bounce-in and its fade are percentages, so
+   * the two have to be changed together or a longer life just means a
+   * slower, mushier animation.
+   */
+  reactionFloatMinMs: 5000,
+  reactionFloatMaxMs: 7500,
   /** Poll results stay expanded this long, then minimize. */
   pollResultVisibleMs: 20000,
   /**

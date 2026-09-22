@@ -111,7 +111,7 @@ html.lr-role-overlay {
 .lr-float {
   position: absolute;
   will-change: transform, opacity;
-  animation: lr-float-up var(--lr-life, 3000ms) cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
+  animation: lr-float-up var(--lr-life, 5000ms) cubic-bezier(0.22, 0.61, 0.36, 1) forwards;
 }
 
 .lr-chip {
