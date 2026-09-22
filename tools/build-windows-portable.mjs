@@ -26,6 +26,8 @@ cpSync(join(release, 'lecture-react.exe'), join(output, 'Lecture React.exe'));
 cpSync(join(REPO, `apps/overlay/src-tauri/binaries/lr-server-${target}.exe`), join(output, 'lr-server.exe'));
 // Beside lr-server.exe, which is where the server looks for it first.
 cpSync(join(REPO, `apps/overlay/src-tauri/binaries/cloudflared-${target}.exe`), join(output, 'cloudflared.exe'));
+// Also beside lr-server.exe: the Korean fonts the end-of-class PDF report is set in.
+cpSync(join(REPO, 'packages/server/assets/fonts'), join(output, 'fonts'), { recursive: true });
 cpSync(join(REPO, 'apps/student/dist'), join(output, 'student'), { recursive: true });
 writeFileSync(join(output, 'portable.txt'), 'Store WebView2 settings in the adjacent Data folder.\r\n');
 // The app offers the same rule from the launcher, but a locked-down machine may

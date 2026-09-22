@@ -7,6 +7,7 @@ import {
   firewallStatus,
   hideLauncher,
   isDesktop,
+  revealPath,
   showOverlay,
   type FirewallStatus,
 } from '../lib/desktop';
@@ -33,6 +34,17 @@ const JOIN_URL_POLL_MS = 10_000;
  */
 const TUNNEL_POLL_MS = 1_500;
 
+/** The end-of-class PDF: where it went, or why there is none. */
+interface ReportInfo {
+  path?: string;
+  error?: string;
+}
+
+/** `/Users/x/Documents/Lecture React Reports/foo.pdf` -> `foo.pdf`, on either slash. */
+function baseName(path: string): string {
+  return path.split(/[\\/]/).pop() ?? path;
+}
+
 /**
  * The small ordinary window: start the class, share the code, launch the
  * overlay. Once the overlay is up this window steps out of the way — and drops
@@ -46,6 +58,9 @@ export function Launcher() {
   const [copied, setCopied] = useState<'link' | 'code' | null>(null);
   const [handedOff, setHandedOff] = useState(false);
   const [ended, setEnded] = useState(false);
+  // Kept locally because the hand-off path learns about the report from a
+  // poll and then resets the session state, which would drop it.
+  const [report, setReport] = useState<ReportInfo | null>(null);
   const [starting, setStarting] = useState(false);
   const [firewall, setFirewall] = useState<FirewallStatus>({ supported: false, allowed: true });
   const [fixingFirewall, setFixingFirewall] = useState(false);
@@ -140,6 +155,8 @@ export function Launcher() {
         if (result && (!result.exists || result.status === 'ended')) {
           setHandedOff(false);
           setStarting(false);
+          // Before reset(): the report only exists in this response.
+          setReport(result.report ? { path: result.report.path } : null);
           reset();
           setEnded(true);
         }
@@ -153,6 +170,11 @@ export function Launcher() {
       window.removeEventListener('focus', check);
     };
   }, [handedOff, state.code, reset]);
+
+  // Socket still attached: the `session:ended` message carried the report.
+  useEffect(() => {
+    if (state.status === 'ended') setReport(state.report);
+  }, [state.status, state.report]);
 
   const classEnded = ended || state.status === 'ended';
 
@@ -204,6 +226,7 @@ export function Launcher() {
 
   const onStart = useCallback(() => {
     setEnded(false);
+    setReport(null);
     setStarting(true);
     startClass();
   }, [startClass]);
@@ -224,6 +247,28 @@ export function Launcher() {
           <button type="button" className="lr-btn lr-btn-primary lr-btn-lg" onClick={onStart}>
             [ START CLASS ]
           </button>
+
+          {/* The PDF the server wrote on the way out. Revealing it is a
+              desktop call, so in browser review mode the button is inert. */}
+          {report?.path && (
+            <div className="flex max-w-75 flex-col items-center gap-1.5">
+              <p className="lr-text max-w-75 break-all text-center text-[10px] text-(--lr-muted)">
+                Report saved: {baseName(report.path)}
+              </p>
+              <button
+                type="button"
+                className="lr-btn"
+                onClick={() => report.path && void revealPath(report.path)}
+              >
+                [ Show Report ]
+              </button>
+            </div>
+          )}
+          {report?.error && (
+            <p className="lr-text max-w-75 text-center text-[10px] text-(--lr-muted)">
+              Report could not be written: {report.error}
+            </p>
+          )}
         </>
       ) : state.status !== 'active' ? (
         <>

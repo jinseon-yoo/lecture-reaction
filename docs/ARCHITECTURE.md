@@ -1125,9 +1125,33 @@ overlay in one glance and one click.
 
 ---
 
+## 12b. The end-of-class report
+
+`packages/server/src/report.ts` writes a PDF the moment `session:end` arrives — before the
+session is dropped from memory — and hands its path back on the professor's `session:ended`
+frame (never the students'; never over the tunnel, since it is a location in the professor's
+home directory). The launcher, which has already handed off its socket by then, picks the same
+path up from `/api/session/:code`.
+
+Its raw material is three aggregate series the store now keeps per session: `reactionLog`
+(one row per flushed burst — `burst.ts` has already collapsed thirty taps into one count),
+`presenceLog` (sampled on every presence broadcast, deduplicated on change), and
+`pollHistory`. Plus the questions the session already held. None of it carries a participant
+id, which is what lets the report exist without touching §9 — the professor learns nothing
+after the class that they could not see during it.
+
+The PDF is drawn with pdf-lib: a KPI row, a stacked per-bucket timeline (following vs
+struggling vs faults, presence as a step line, poll ticks), reaction and poll bars, then every
+question with its answered-at time. The overlay is deliberately retro; the report deliberately
+is not — it is read at a desk and filed. The typeface is Nanum Gothic, embedded **whole**: the
+subsetter in `@pdf-lib/fontkit` silently drops the outlines of Hangul glyphs from this face
+(the text layer survives, the page renders blank), and a 1.5 MB file once per lecture is
+cheaper than a report nobody can read.
+
 ## 13. Future work
 
-- **Durable history behind the store interface.** `SessionStore` already isolates persistence.
+- **Durable history behind the store interface.** (The end-of-class report in §12b covers the
+  single most-asked-for piece of this — a record of one lecture — without a database.) `SessionStore` already isolates persistence.
   A Postgres adapter against the §8 schema gives end-of-lecture question exports and cross-lecture
   continuity without touching the protocol or either client. Reactions would move from
   aggregate-only to appended rows so "what confused the room at minute 34" becomes answerable —

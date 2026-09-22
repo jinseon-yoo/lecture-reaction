@@ -3,7 +3,13 @@
  * library: one shape, one transition function, easy to reason about.
  */
 
-import { LIMITS, type PollResultsView, type QuestionView, type ServerMsg } from '@lr/shared';
+import {
+  LIMITS,
+  type ClassReportRef,
+  type PollResultsView,
+  type QuestionView,
+  type ServerMsg,
+} from '@lr/shared';
 import type { ConnectionState } from './socket';
 
 export type ClassStatus = 'idle' | 'active' | 'ended';
@@ -24,6 +30,8 @@ export interface SessionState {
   /** Running total of reaction *instances* seen this class (for Quiet Mode). */
   reactionTotal: number;
   lastError: string | null;
+  /** Where the end-of-class PDF landed (or why it did not). Set on `session:ended`. */
+  report: ClassReportRef | null;
 }
 
 export const initialSessionState: SessionState = {
@@ -39,6 +47,7 @@ export const initialSessionState: SessionState = {
   poll: null,
   reactionTotal: 0,
   lastError: null,
+  report: null,
 };
 
 export type SessionAction =
@@ -103,10 +112,11 @@ function applyServerMsg(state: SessionState, msg: ServerMsg): SessionState {
         token: msg.token,
         startedAt: msg.startedAt,
         lastError: null,
+        report: null,
       };
 
     case 'session:ended':
-      return { ...state, status: 'ended', presence: 0, poll: null };
+      return { ...state, status: 'ended', presence: 0, poll: null, report: msg.report ?? null };
 
     case 'presence':
       return { ...state, presence: msg.count };

@@ -17,3 +17,6 @@ tools/.cache/
 .codex/
 .claude
 .vscode
+
+# Rasterised pages from `pnpm -F @lr/server report`
+packages/server/test-output/

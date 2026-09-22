@@ -19,6 +19,7 @@ import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { normalizeCode } from '@lr/shared';
 import { Hub, type Role } from './hub.js';
+import { resolveFontsDir, resolveReportsDir } from './report.js';
 import { StaticSite } from './static.js';
 import { lanAddress, rankLanCandidates } from './lan.js';
 import { Tunnel } from './tunnel.js';
@@ -133,7 +134,15 @@ function handleHttp(req: IncomingMessage, res: ServerResponse): void {
     const code = normalizeCode(decodeURIComponent(pathname.slice('/api/session/'.length)));
     const session = code ? hub.store.getByCode(code) : undefined;
     if (!session) return json(res, 200, { exists: false, status: 'unknown' });
-    return json(res, 200, { exists: session.status === 'active', status: session.status });
+    // The report path is a location in the professor's home directory. The
+    // overlay asks for it over loopback; nobody arriving through the tunnel
+    // has any business with it.
+    const report = !viaTunnel(req) && session.reportPath ? { path: session.reportPath } : undefined;
+    return json(res, 200, {
+      exists: session.status === 'active',
+      status: session.status,
+      ...(report ? { report } : {}),
+    });
   }
 
   if (pathname.startsWith('/api/')) return json(res, 404, { error: 'not_found' });
@@ -214,6 +223,11 @@ httpServer.listen(PORT, HOST, () => {
       ? `[lecture-react] serving student app from ${STUDENT_DIST}`
       : '[lecture-react] student app not built yet (apps/student/dist missing)',
   );
+  console.log(`[lecture-react] reports: ${resolveReportsDir()}`);
+  // Said now rather than at the end of class, when it is too late to fix.
+  if (resolveFontsDir() === null) {
+    console.warn('[lecture-react] report fonts not found — end-of-class reports will fail (set LECTURE_FONTS_DIR)');
+  }
 
   // Opened at boot, not on demand, and this is the default.
   //

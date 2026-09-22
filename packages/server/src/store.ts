@@ -13,7 +13,10 @@
  *   PollOption     (id pk, poll_id fk, label, ordinal)
  *   PollResponse   (poll_id fk, participant_id fk, option_id fk, answered_at) -- pk(poll_id, participant_id)
  *
- * Reactions are intentionally absent: they are ephemeral and never stored.
+ * Reactions are intentionally absent as rows: they are ephemeral and never
+ * stored per participant. What IS kept is the end-of-class report's raw
+ * material — per-burst counts, presence samples and finished polls — all of
+ * it aggregate, none of it attributable. See `report.ts`.
  */
 
 import { randomUUID, randomBytes } from 'node:crypto';
@@ -23,6 +26,7 @@ import {
   generateCode,
   type PollKind,
   type PollOptionView,
+  type ReactionType,
   type PollResultsView,
   type PollView,
   type QuestionView,
@@ -72,6 +76,19 @@ export interface Poll {
   responses: Map<string, string>;
 }
 
+/** One flushed reaction burst: the room said `type`, `count` times, at `at`. */
+export interface ReactionSample {
+  at: number;
+  type: ReactionType;
+  count: number;
+}
+
+/** How many students were connected at `at`. */
+export interface PresenceSample {
+  at: number;
+  count: number;
+}
+
 export interface Session {
   id: string;
   code: string;
@@ -85,6 +102,19 @@ export interface Session {
   participants: Map<string, Participant>;
   questions: Map<string, Question>;
   poll: Poll | null;
+  /**
+   * The class as a time series, for the report. Bursts rather than taps —
+   * `burst.ts` has already collapsed thirty simultaneous "confused" into one
+   * row of count 30 — and presence sampled whenever it was broadcast. Neither
+   * carries a participant id, which is what lets the report exist at all
+   * without reopening the privacy boundary in ARCHITECTURE §9.
+   */
+  reactionLog: ReactionSample[];
+  presenceLog: PresenceSample[];
+  /** Every poll that has been closed, oldest first. `poll` is only the open one. */
+  pollHistory: Poll[];
+  /** Where the end-of-class report was written, once it has been. */
+  reportPath?: string;
 }
 
 export type AddQuestionResult =
@@ -115,6 +145,9 @@ export class Store {
       participants: new Map(),
       questions: new Map(),
       poll: null,
+      reactionLog: [],
+      presenceLog: [],
+      pollHistory: [],
     };
     this.sessions.set(session.id, session);
     this.byCode.set(code, session.id);
@@ -149,7 +182,28 @@ export class Store {
   endSession(session: Session, now = Date.now()): void {
     session.status = 'ended';
     session.endedAt = now;
+    // A poll still open at the end is part of the record too.
+    if (session.poll) {
+      session.poll.endedAt = now;
+      session.pollHistory.push(session.poll);
+    }
     session.poll = null;
+  }
+
+  /* ---------------------------------------------------------------- */
+  /* Report material                                                   */
+  /* ---------------------------------------------------------------- */
+
+  recordBurst(session: Session, type: ReactionType, count: number, at = Date.now()): void {
+    session.reactionLog.push({ at, type, count });
+  }
+
+  /** Appends only on change, so a quiet hour is two points, not two thousand. */
+  samplePresence(session: Session, now = Date.now()): void {
+    const count = this.presenceCount(session);
+    const last = session.presenceLog[session.presenceLog.length - 1];
+    if (last && last.count === count) return;
+    session.presenceLog.push({ at: now, count });
   }
 
   /** Forget a session entirely, freeing its code for reuse. */
@@ -315,6 +369,7 @@ export class Store {
     if (!poll || poll.id !== pollId) return undefined;
     poll.endedAt = now;
     session.poll = null;
+    session.pollHistory.push(poll);
     return poll;
   }
 

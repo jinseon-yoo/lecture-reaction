@@ -21,6 +21,7 @@ import {
   type ServerMsg,
 } from '@lr/shared';
 import { BurstAggregator, type Burst } from './burst.js';
+import { writeReport } from './report.js';
 import {
   Store,
   buildPollOptions,
@@ -184,7 +185,13 @@ export class Hub {
       case 'session:create':
         return this.onSessionCreate(ws, state, msg.resume);
       case 'session:end':
-        return this.onSessionEnd(ws, state);
+        // The only async handler: it waits on the report before answering.
+        // Nothing here needs the result, and `handleMessage` already caught
+        // anything synchronous, so the promise just gets a landing pad.
+        void this.onSessionEnd(ws, state).catch((err) => {
+          console.error('[hub] session end failed:', err);
+        });
+        return;
       case 'question:resolve':
         return this.onQuestionResolve(ws, state, msg.questionId);
       case 'poll:start':
@@ -238,6 +245,9 @@ export class Hub {
       }
     }
     if (!session) session = this.store.createSession();
+    // A zero at the start anchors the report's presence line to class start
+    // rather than to the first join, however late that was.
+    if (session.presenceLog.length === 0) this.store.samplePresence(session);
 
     this.attachProfessor(ws, state, session);
 
@@ -290,7 +300,7 @@ export class Hub {
     return session;
   }
 
-  private onSessionEnd(ws: WebSocket, state: ConnState): void {
+  private async onSessionEnd(ws: WebSocket, state: ConnState): Promise<void> {
     const session = this.professorSession(ws, state);
     if (!session) return;
 
@@ -299,9 +309,23 @@ export class Hub {
     this.bursts.clearSession(session.id);
     this.clearTimers(session.id);
 
-    const ended: ServerMsg = { t: 'session:ended', at };
-    for (const sock of this.professors.get(session.id) ?? []) this.safeSend(sock, ended);
+    // The report is written before anyone hears `session:ended`, so that the
+    // frame the overlay acts on already says where the PDF is (or why there
+    // is none). It costs the professor about half a second at the end of
+    // class; the students' sockets stay open meanwhile but the session is
+    // already `ended`, so nothing they send in that window gets through.
+    const report = await writeReport(session, at);
+    if ('path' in report) {
+      session.reportPath = report.path;
+      console.log(`[lecture-react] report written: ${report.path}`);
+    }
+    // The failure case has already been logged by `writeReport`.
 
+    // Two frames, not one: the path is the professor's home directory.
+    const endedForProfessor: ServerMsg = { t: 'session:ended', at, report };
+    for (const sock of this.professors.get(session.id) ?? []) this.safeSend(sock, endedForProfessor);
+
+    const ended: ServerMsg = { t: 'session:ended', at };
     const studentSockets = this.students.get(session.id);
     for (const sock of studentSockets ?? []) {
       this.safeSend(sock, ended);
@@ -504,6 +528,10 @@ export class Hub {
   }
 
   private sendBurst(sessionId: string, burst: Burst): void {
+    // The report logs the burst, not the taps — already aggregate, never per student.
+    const session = this.store.getSession(sessionId);
+    if (session) this.store.recordBurst(session, burst.type, burst.count, burst.at);
+
     // Bursts are professor-only by design: students never see the room's mood.
     this.toProfessors(sessionId, {
       t: 'reaction:burst',
@@ -543,6 +571,9 @@ export class Hub {
       delete timers.presence;
       const live = this.store.getSession(session.id);
       if (!live) return;
+      // Sampled at the same cadence the overlay sees it, so the report's
+      // presence line is the one the professor watched.
+      this.store.samplePresence(live);
       this.toProfessors(live.id, { t: 'presence', count: this.store.presenceCount(live) });
     }, PRESENCE_DEBOUNCE_MS);
     timers.presence.unref?.();

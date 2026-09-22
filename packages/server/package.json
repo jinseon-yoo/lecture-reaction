@@ -10,10 +10,13 @@
     "typecheck": "tsc --noEmit",
     "smoke": "node test/smoke.mjs",
     "simulate": "node test/simulate-class.mjs",
-    "test:lan": "node --experimental-strip-types test/lan.mjs"
+    "test:lan": "node --experimental-strip-types test/lan.mjs",
+    "report": "tsx test/report.mjs test-output --render"
   },
   "dependencies": {
     "@lr/shared": "workspace:*",
+    "@pdf-lib/fontkit": "1.1.1",
+    "pdf-lib": "1.17.1",
     "ws": "^8.18.0"
   },
   "devDependencies": {

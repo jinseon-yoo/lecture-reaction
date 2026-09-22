@@ -168,11 +168,19 @@ export type ErrorCode =
  */
 export type LimitScope = 'reaction' | 'question' | 'vote' | 'poll';
 
+/** Where the end-of-class PDF landed — or why it did not. */
+export type ClassReportRef = { path: string; error?: undefined } | { path?: undefined; error: string };
+
 export type ServerMsg =
   /* both */
   | { t: 'error'; code: ErrorCode; message: string; scope?: LimitScope }
   | { t: 'pong' }
-  | { t: 'session:ended'; at: number }
+  /**
+   * `report` is professor-only and never crosses the tunnel: it is a path on
+   * the professor's own disk. Absent while a report is still being written,
+   * `{ error }` if it could not be.
+   */
+  | { t: 'session:ended'; at: number; report?: ClassReportRef }
   /* professor */
   | { t: 'session:created'; sessionId: string; code: string; token: string; startedAt: number }
   | { t: 'presence'; count: number }

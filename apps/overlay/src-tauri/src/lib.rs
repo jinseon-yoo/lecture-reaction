@@ -425,17 +425,32 @@ fn start_server(app: &AppHandle) -> Option<std::process::Child> {
     }
 
     // The packaged server cannot locate the student app relative to its own
-    // source, so it is told where the bundled copy lives.
-    let student_dist = app
+    // source, so it is told where the bundled copy lives. Same for the fonts
+    // the end-of-class PDF is set in: they ship as a Tauri resource, not
+    // beside the server binary where its source-tree default would look.
+    let resources = app.path().resource_dir().ok();
+    let student_dist = resources.as_ref().map(|dir| dir.join("student"));
+    let fonts_dir = resources.as_ref().map(|dir| dir.join("fonts"));
+    // Where the PDF lands. The server defaults to the same folder under the
+    // home directory, but the OS knows better where "Documents" actually is
+    // (localised, redirected, on a USB profile). Skipped when the lookup
+    // fails; the server's own default takes over.
+    let reports_dir = app
         .path()
-        .resource_dir()
-        .map(|dir| dir.join("student"))
+        .document_dir()
+        .map(|dir| dir.join("Lecture React Reports"))
         .ok();
 
     let mut cmd = std::process::Command::new(&binary);
     cmd.env("PORT", SERVER_PORT.to_string());
     if let Some(dist) = student_dist {
         cmd.env("LECTURE_STUDENT_DIST", dist);
+    }
+    if let Some(fonts) = fonts_dir {
+        cmd.env("LECTURE_FONTS_DIR", fonts);
+    }
+    if let Some(reports) = reports_dir {
+        cmd.env("LECTURE_REPORTS_DIR", reports);
     }
 
     #[cfg(windows)]
@@ -559,6 +574,54 @@ fn allow_firewall() -> Result<(), String> {
     }
 }
 
+/* ------------------------------------------------------------------ */
+/* Files                                                               */
+/* ------------------------------------------------------------------ */
+
+/// Shows the file in the OS file manager, selected where the platform can.
+///
+/// The end-of-class report is written by the server, not by this process, so
+/// the frontend only ever has a path. Selecting it in Finder/Explorer is the
+/// one gesture that works for "where did it go?" without opening a PDF viewer
+/// over the slides.
+#[tauri::command]
+fn reveal_path(path: String) -> Result<(), String> {
+    let target = std::path::PathBuf::from(&path);
+    if !target.exists() {
+        return Err(format!("no file at {path}"));
+    }
+
+    #[cfg(target_os = "macos")]
+    let mut cmd = {
+        let mut cmd = std::process::Command::new("open");
+        cmd.arg("-R").arg(&target);
+        cmd
+    };
+    #[cfg(windows)]
+    let mut cmd = {
+        use std::os::windows::process::CommandExt;
+        // Explorer wants `/select,<path>` as ONE argument; splitting it makes
+        // it open the Documents folder instead of selecting the file.
+        let mut cmd = std::process::Command::new("explorer");
+        cmd.raw_arg(format!("/select,\"{}\"", target.display()));
+        cmd.creation_flags(CREATE_NO_WINDOW);
+        cmd
+    };
+    #[cfg(not(any(target_os = "macos", windows)))]
+    let mut cmd = {
+        // No portable "select in file manager" on Linux; opening the folder is
+        // the closest thing every desktop can do.
+        let folder = target.parent().map(|p| p.to_path_buf()).unwrap_or(target.clone());
+        let mut cmd = std::process::Command::new("xdg-open");
+        cmd.arg(folder);
+        cmd
+    };
+
+    cmd.spawn()
+        .map(|_| ())
+        .map_err(|err| format!("could not open the file manager: {err}"))
+}
+
 pub fn run() {
     // Set before Tauri creates either webview. Both windows share USB-local storage.
     #[cfg(windows)]
@@ -611,6 +674,7 @@ pub fn run() {
             quit_app,
             firewall_status,
             allow_firewall,
+            reveal_path,
         ])
         .manage(ServerProcess(Mutex::new(None)))
         .setup(|app| {

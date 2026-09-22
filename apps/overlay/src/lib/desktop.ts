@@ -85,6 +85,11 @@ export const firewallStatus = async (): Promise<FirewallStatus> =>
 /** Adds the inbound rule. Raises a UAC prompt; rejects if it is dismissed. */
 export const allowFirewall = () => invoke<void>('allow_firewall');
 
+/* ---------------- files ---------------- */
+
+/** Selects the file in Finder / Explorer (or opens its folder on Linux). */
+export const revealPath = (path: string) => invoke<void>('reveal_path', { path });
+
 /* ---------------- events from Rust ---------------- */
 
 export interface CursorPoint {

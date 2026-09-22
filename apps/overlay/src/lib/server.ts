@@ -138,9 +138,11 @@ async function tunnelRequest(method: 'POST' | 'DELETE'): Promise<TunnelState> {
   }
 }
 
-interface SessionLookup {
+export interface SessionLookup {
   exists: boolean;
   status: 'active' | 'ended';
+  /** Only for an ended class, and only when the server wrote the PDF locally. */
+  report?: { path: string };
 }
 
 /**
@@ -153,7 +155,12 @@ export async function fetchSessionStatus(code: string): Promise<SessionLookup | 
     if (!res.ok) return null;
     const data = (await res.json()) as Partial<SessionLookup>;
     if (typeof data.exists !== 'boolean') return null;
-    return { exists: data.exists, status: data.status === 'ended' ? 'ended' : 'active' };
+    const lookup: SessionLookup = {
+      exists: data.exists,
+      status: data.status === 'ended' ? 'ended' : 'active',
+    };
+    if (typeof data.report?.path === 'string') lookup.report = { path: data.report.path };
+    return lookup;
   } catch {
     return null;
   }

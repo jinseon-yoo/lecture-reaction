@@ -485,6 +485,7 @@ Testing a lecture tool normally needs a lecture. These stand in for one:
 | `pnpm test:tools` | Tests platform selection, shell-free command arguments, package entrypoints, and IPv6-disabled port handling. |
 | `pnpm build:desktop` | Builds student assets and the standalone server, then compiles and packages the desktop app for the current OS. |
 | `pnpm build:server-binary` | Compiles the server into a single self-contained executable for the desktop bundle. Downloads an official node into `tools/.cache` on first run. |
+| `pnpm -F @lr/server report` | Builds the end-of-class PDF from a synthetic 50-minute class (26 students, a rough patch at minute 20, six questions in Korean and English, three polls) into `packages/server/test-output/` and rasterises the pages, so the report can be checked without sitting through a lecture. Needs `pdftoppm` for the images. |
 | `pnpm cloudflared` | Downloads the `cloudflared` binary the outbound tunnel runs into `tools/.cache`, where a source-run server finds it. The packaging scripts fetch their own per-target copy; this one is for `pnpm dev` / `pnpm desktop`. `LECTURE_TUNNEL=1` makes a source-run server open the tunnel at boot. |
 | `pnpm icon` | Regenerates the app icon from the pixel grid in `tools/make-icon.mjs` and expands it to every platform size. Tauri needs `src-tauri/icons/32x32.png` at compile time — if it is missing, the **Rust** build fails with `failed to open icon`, which looks unrelated to icons at first glance. |
 
@@ -570,12 +571,55 @@ your clicker and your IDE all behave as if it were not running.
 
 ### Ending the class
 
+The moment you end the class, a **PDF report** is written to
+`Documents/Lecture React Reports/` and the launcher shows **Show Report**. It is
+a dashboard of the whole lecture: how many students were there, the reactions
+as a timeline so you can see the minute the room stopped following, every
+understanding check with its result, and every question in full — with whether
+you answered it, and when. Nothing in it identifies a student; it is built from
+the same aggregate counts the overlay received. See
+[After the class](#after-the-class).
+
+
 Click **End Class** on the strip and confirm. Every student immediately gets
 `Class ended. Thanks for participating.`, the code stops working, and the overlay
 closes. Starting another class generates a different code; nothing carries over.
 
 Nothing is stored. Reactions were never written down, and the questions go with the
 session.
+
+## After the class
+
+Everything the overlay shows during a lecture is designed to be glanced at and
+forgotten — reactions float for five seconds, questions leave when answered.
+That is right for the room and useless afterwards. So ending the class writes a
+report: `Documents/Lecture React Reports/Lecture-React-<date>-<time>-<code>.pdf`.
+
+What is in it:
+
+- **The numbers.** Peak students, total reactions and reactions per student,
+  questions asked and answered, checks run.
+- **The room over time.** One bar per minute (wider buckets for a long lecture)
+  of *following* (understand, love it, interesting) against *struggling*
+  (confused, too fast, again), the connected-student count as a line, and a tick
+  wherever a check was run. This is the chart that answers "when did I lose them".
+- **Reactions**, by type, with counts and share.
+- **Every understanding check and poll**, with the time it ran and each option's
+  share of the answers.
+- **Every question**, most voted first, in full, with when it was asked and
+  whether — and when — it was answered. Unanswered ones are flagged.
+
+What is deliberately not in it: anything about an individual student. The
+report is generated from the same aggregate material the overlay received
+during class (burst counts, presence samples, poll tallies, question text with
+vote counts), so the privacy boundary in `docs/ARCHITECTURE.md` §9 is
+unchanged. There is no way to learn who asked or who voted from the PDF because
+the server never told the professor's side either.
+
+It is written by the server the instant the class ends, before the session is
+dropped from memory, in about half a second. If the fonts it needs are missing
+(`LECTURE_FONTS_DIR`, bundled with the app) the launcher says so and the class
+still ends normally. `LECTURE_REPORTS_DIR` overrides where it is written.
 
 ## What students see
 
