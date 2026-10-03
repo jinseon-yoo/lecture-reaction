@@ -579,7 +579,7 @@ The tables below are the complete contents of `packages/shared/src/protocol.ts`.
   | `too_fast` | Too Fast | You're going too fast. | `forward` | sky |
   | `too_slow` | Too Slow | You're going too slowly. | `backward` | lavender |
   | `again` | Again | Please explain that again. | `rotate-left` | sky |
-  | `interesting` | Interesting | This is interesting. | `lightbulb` | yellow |
+  | `interesting` | Idea | I have an idea. | `lightbulb` | yellow |
 
   Both clients read labels, icons and colours from this one table. Adding a reaction type is a
   single-file change plus whatever art the icon needs.

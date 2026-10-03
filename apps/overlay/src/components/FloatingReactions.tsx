@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type RefObject } from 'react';
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { LIMITS, isFaultType, type ReactionType, type ReactionZone } from '@lr/shared';
 import { useBursts } from '../lib/SessionContext';
-import { reactionAccent, reactionIcon } from '../lib/icons';
+import { reactionEmoji } from '../lib/icons';
 import { pickSpawnPoint } from '../lib/spawn';
 
 /**
@@ -119,13 +118,10 @@ export function FloatingReactions({ zone, quiet }: { zone: ReactionZone; quiet: 
         >
           <span
             key={`${item.key}:${item.bumps}`}
-            className={`lr-chip${item.bumps > 0 ? ' lr-pop' : ''}`}
-            style={{ '--lr-chip-accent': reactionAccent(item.type) } as CSSProperties}
+            className={`lr-emoji${item.bumps > 0 ? ' lr-pop' : ''}`}
           >
-            <FontAwesomeIcon icon={reactionIcon(item.type)} />
-            {item.count > 1 && (
-              <span className="lr-pixel text-[11px]">×&nbsp;{item.count}</span>
-            )}
+            <img src={reactionEmoji(item.type)} alt="" draggable={false} />
+            {item.count > 1 && <span className="lr-emoji-count lr-pixel">×{item.count}</span>}
           </span>
         </div>
       ))}

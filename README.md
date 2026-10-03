@@ -6,7 +6,7 @@ presenting.
 
 The professor runs a click-through desktop window on top of PowerPoint, Keynote, a PDF, a
 browser, an IDE — anything. Students open a URL on their phone/ipad/laptop, type a 5-character class code,
-and tap: *understand*, *confused*, *too fast*, *again*, *interesting*, *love it* — plus
+and tap: *understand*, *confused*, *too fast*, *again*, *idea*, *love it* — plus
 *can't see* and *can't hear* for when the projector washes out or the mic is off. Reactions
 float up over the slides. Questions stack as compact bubbles in the bottom-right corner, sorted by
 votes; the professor clears them with a checkmark and can fire a one-click understanding check,
@@ -148,7 +148,7 @@ Six feelings in a 3x2 grid, and two fault reports on their own row beneath it.
 | **Too Fast** | You're going too fast. | `fa-forward` | sky |
 | **Love It** | I love this. | `fa-heart` | pink |
 | **Again** | Please explain that again. | `fa-rotate-left` | lavender |
-| **Interesting** | This is interesting. | `fa-lightbulb` | yellow |
+| **Idea** | I have an idea. | `fa-lightbulb` | yellow |
 | **Can't See** | I can't see the screen. | `fa-eye-slash` | aqua |
 | **Can't Hear** | I can't hear you. | `fa-volume-xmark` | sage |
 
@@ -600,7 +600,7 @@ What is in it:
 - **The numbers.** Peak students, total reactions and reactions per student,
   questions asked and answered, checks run.
 - **The room over time.** One bar per minute (wider buckets for a long lecture)
-  of *following* (understand, love it, interesting) against *struggling*
+  of *following* (understand, love it, idea) against *struggling*
   (confused, too fast, again), the connected-student count as a line, and a tick
   wherever a check was run. This is the chart that answers "when did I lose them".
 - **Reactions**, by type, with counts and share.
@@ -632,7 +632,7 @@ two, with the class's questions alongside the reaction pad instead of far below 
    HOW IS THE LECTURE GOING?
 
    [ v Understand ] [ ? Confused  ] [ >> Too Fast ]
-   [ <3 Love It   ] [ <- Again    ] [ !  Interesting ]
+   [ <3 Love It   ] [ <- Again    ] [ !  Idea        ]
    [ (x) Can't See      ] [ <x) Can't Hear         ]
 
    You're anonymous - your professor sees reactions,
