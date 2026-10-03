@@ -64,7 +64,8 @@ for (const s of studs) {
 // Keep a calm but continuous reaction flow so the overlay always has floaters.
 const waves = [
   ['confused', 22], ['understand', 9], ['too_fast', 4],
-  ['idea', 7], ['again', 12], ['understand', 15], ['too_slow', 3],
+  ['idea', 7], ['again', 12], ['understand', 15], ['love', 6],
+  ['cant_hear', 3],
 ];
 for (let round = 0; round < 30; round++) {
   const [type, n] = waves[round % waves.length];

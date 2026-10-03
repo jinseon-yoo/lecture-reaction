@@ -71,6 +71,20 @@ pub struct OverlayState {
     quiet_mode: AtomicBool,
     /// Cleared when the overlay window goes away, which stops the poll thread.
     cursor_thread_running: Arc<AtomicBool>,
+    /// The screen the professor picked for the overlay, by `display_id`.
+    /// `None` — and any id that is no longer connected — means the primary.
+    display: Mutex<Option<String>>,
+}
+
+/// One connected screen, as the launcher lists it when there is a choice.
+#[derive(Clone, Serialize)]
+struct DisplayInfo {
+    id: String,
+    width: u32,
+    height: u32,
+    primary: bool,
+    /// The one the overlay covers right now.
+    selected: bool,
 }
 
 #[derive(Clone, Serialize)]
@@ -101,6 +115,22 @@ struct ToggleEvent {
 /// transparent overlay being broken: the window is fine, it is simply drawing
 /// somewhere the slides are not.
 fn overlay_bounds<R: Runtime>(app: &AppHandle<R>) -> (PhysicalPosition<i32>, PhysicalSize<u32>) {
+    // With the desktop extended, the slides are usually on the screen that is
+    // *not* the primary one, so the professor can pick. The pick is honoured
+    // only while that screen is connected: unplug the projector and the
+    // overlay comes home to the primary display instead of vanishing.
+    if let Some(id) = chosen_display(app) {
+        if let Ok(monitors) = app.available_monitors() {
+            let found = monitors
+                .iter()
+                .enumerate()
+                .find(|(i, m)| display_id(*i, m) == id);
+            if let Some((_, monitor)) = found {
+                return (*monitor.position(), *monitor.size());
+            }
+        }
+    }
+
     // `available_monitors`/`primary_monitor` can both fail on a headless or
     // still-initialising display server; fall back to a sane default rather
     // than refusing to open the overlay.
@@ -114,6 +144,20 @@ fn overlay_bounds<R: Runtime>(app: &AppHandle<R>) -> (PhysicalPosition<i32>, Phy
     } else {
         (PhysicalPosition::new(0, 0), PhysicalSize::new(1440, 900))
     }
+}
+
+/// A name for a screen that survives a resolution change. The OS name where
+/// there is one; the slot in the list otherwise.
+fn display_id(index: usize, monitor: &tauri::Monitor) -> String {
+    monitor
+        .name()
+        .cloned()
+        .unwrap_or_else(|| format!("display-{index}"))
+}
+
+fn chosen_display<R: Runtime>(app: &AppHandle<R>) -> Option<String> {
+    app.try_state::<OverlayState>()
+        .and_then(|state| state.display.lock().ok().and_then(|d| d.clone()))
 }
 
 /// Snaps the overlay onto the current screen rectangle.
@@ -288,6 +332,47 @@ fn show_overlay(app: AppHandle, state: State<'_, OverlayState>) -> Result<(), St
     let _ = window.set_visible_on_all_workspaces(true);
     apply_click_through(&app, &state);
     Ok(())
+}
+
+/// Every connected screen. Mirrored displays are one screen to the OS, so the
+/// launcher only has something to offer when the desktop is extended.
+#[tauri::command]
+fn list_displays(app: AppHandle) -> Vec<DisplayInfo> {
+    let monitors = app.available_monitors().unwrap_or_default();
+    let primary_pos = app.primary_monitor().ok().flatten().map(|m| *m.position());
+    let chosen = chosen_display(&app);
+    let ids: Vec<String> = monitors
+        .iter()
+        .enumerate()
+        .map(|(i, m)| display_id(i, m))
+        .collect();
+    // A pick that is no longer plugged in falls back to the primary.
+    let chosen = chosen.filter(|id| ids.contains(id));
+    monitors
+        .iter()
+        .zip(ids)
+        .map(|(m, id)| {
+            let primary = primary_pos.is_some_and(|p| p == *m.position());
+            DisplayInfo {
+                selected: chosen.as_ref().map_or(primary, |c| *c == id),
+                id,
+                width: m.size().width,
+                height: m.size().height,
+                primary,
+            }
+        })
+        .collect()
+}
+
+/// Moves the overlay to the chosen screen, now if it is already up.
+#[tauri::command]
+fn set_overlay_display(app: AppHandle, state: State<'_, OverlayState>, id: Option<String>) {
+    if let Ok(mut slot) = state.display.lock() {
+        *slot = id;
+    }
+    if let Some(window) = app.get_webview_window(OVERLAY_LABEL) {
+        apply_overlay_bounds(&app, &window);
+    }
 }
 
 #[tauri::command]
@@ -672,6 +757,8 @@ pub fn run() {
             firewall_status,
             allow_firewall,
             reveal_path,
+            list_displays,
+            set_overlay_display,
         ])
         .manage(ServerProcess(Mutex::new(None)))
         .setup(|app| {

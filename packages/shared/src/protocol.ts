@@ -44,19 +44,19 @@ export type PaletteKey =
   | 'sage'
   | 'aqua';
 
-/** Font Awesome free-solid icon names, matching the product spec. */
+/** The picture for each type is the emoji in `assets/emoji/<type>.png`. */
 export const REACTION_META: Record<
   ReactionType,
-  { label: string; meaning: string; icon: string; accent: PaletteKey }
+  { label: string; meaning: string; accent: PaletteKey }
 > = {
-  understand:  { label: 'Understand',  meaning: 'I understand this.',         icon: 'check',        accent: 'mint' },
-  confused:    { label: 'Confused',    meaning: "I'm confused.",              icon: 'question',     accent: 'peach' },
-  too_fast:    { label: 'Too Fast',    meaning: "You're going too fast.",     icon: 'forward',      accent: 'sky' },
-  love:        { label: 'Love It',     meaning: 'I love this.',               icon: 'heart',        accent: 'pink' },
-  again:       { label: 'Again',       meaning: 'Please explain that again.', icon: 'rotate-left',  accent: 'lavender' },
-  idea:        { label: 'Idea',        meaning: 'I have an idea.',            icon: 'lightbulb',    accent: 'yellow' },
-  cant_see:    { label: "Can't See",   meaning: "I can't see the screen.",    icon: 'eye-slash',    accent: 'aqua' },
-  cant_hear:   { label: "Can't Hear",  meaning: "I can't hear you.",          icon: 'volume-xmark', accent: 'sage' },
+  understand:  { label: 'Understand',  meaning: 'I understand this.',         accent: 'mint' },
+  confused:    { label: 'Confused',    meaning: "I'm confused.",              accent: 'peach' },
+  too_fast:    { label: 'Too Fast',    meaning: "You're going too fast.",     accent: 'sky' },
+  love:        { label: 'Love It',     meaning: 'I love this.',               accent: 'pink' },
+  again:       { label: 'Again',       meaning: 'Please explain that again.', accent: 'lavender' },
+  idea:        { label: 'Idea',        meaning: 'I have an idea.',            accent: 'yellow' },
+  cant_see:    { label: "Can't See",   meaning: "I can't see the screen.",    accent: 'aqua' },
+  cant_hear:   { label: "Can't Hear",  meaning: "I can't hear you.",          accent: 'sage' },
 };
 
 /**
@@ -222,10 +222,10 @@ export const LIMITS = {
    * A reaction is glanced at, not read: the professor is mid-sentence and
    * catches it peripherally. The small flat chips needed 5-7.5s to be caught;
    * the 3D emoji are larger and louder, and at that life they crawled, so
-   * the dwell is shorter and the rise longer (see `pickSpawnPoint`). These
-   * are the dwell times, and `lr-float-up` is timed against them — its
-   * bounce-in and its fade are percentages, so the two have to be changed
-   * together or a longer life just means a slower, mushier animation.
+   * the dwell is shorter. These are the dwell times, and `lr-float-up` is
+   * timed against them — its bounce-in and its fade are percentages, so the
+   * two have to be changed together or a longer life just means a slower,
+   * mushier animation.
    */
   reactionFloatMinMs: 3500,
   reactionFloatMaxMs: 5000,

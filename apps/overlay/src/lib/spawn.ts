@@ -48,7 +48,9 @@ function leftZonePoint(vp: Viewport): { x: number; y: number } {
 
 function bottomZonePoint(vp: Viewport): { x: number; y: number } {
   const x = between(vp.width * 0.06, vp.width * RIGHT_RESERVED - 80);
-  const y = between(vp.height * 0.74, vp.height * 0.92);
+  // Stops short of the bottom edge: an emoji is taller than the old chip, and
+  // the control strip sits in that corner.
+  const y = between(vp.height * 0.72, vp.height * 0.85);
   return { x, y };
 }
 
@@ -79,7 +81,7 @@ export function pickSpawnPoint(
   }
 
   // Never rise into the reserved band from below, and never off the top.
-  const maxRise = Math.max(120, Math.min(best.y - 12, vp.height * 0.4));
+  const maxRise = Math.max(120, Math.min(best.y - 12, vp.height * 0.32));
   return {
     x: clamp(best.x, 8, vp.width * RIGHT_RESERVED - 40),
     y: clamp(best.y, 8, vp.height - 60),

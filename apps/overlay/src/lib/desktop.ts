@@ -69,6 +69,29 @@ export const setClickThrough = (enabled: boolean) => invoke<void>('set_click_thr
 /** Full-interaction mode: the overlay stops ignoring cursor events entirely. */
 export const setInteractionMode = (on: boolean) => invoke<void>('set_interaction_mode', { on });
 
+/* ---------------- displays ---------------- */
+
+export interface DisplayInfo {
+  id: string;
+  /** Physical pixels. */
+  width: number;
+  height: number;
+  primary: boolean;
+  /** The screen the overlay covers right now. */
+  selected: boolean;
+}
+
+/**
+ * Every connected screen. One entry when there is a single display or the
+ * projector is mirrored; more only when the desktop is extended. Empty in a
+ * browser.
+ */
+export const listDisplays = async (): Promise<DisplayInfo[]> =>
+  (await invoke<DisplayInfo[]>('list_displays')) ?? [];
+
+/** Puts the overlay on that screen (and moves it there if it is already up). */
+export const setOverlayDisplay = (id: string) => invoke<void>('set_overlay_display', { id });
+
 /* ---------------- windows firewall ---------------- */
 
 export interface FirewallStatus {

@@ -141,16 +141,16 @@ to the slides underneath — except over the controls, the question cards and th
 
 Six feelings in a 3x2 grid, and two fault reports on their own row beneath it.
 
-| Reaction | Meaning | Icon | Colour |
+| Reaction | Meaning | Emoji | Colour |
 | --- | --- | --- | --- |
-| **Understand** | I understand this. | `fa-check` | mint |
-| **Confused** | I'm confused. | `fa-question` | peach |
-| **Too Fast** | You're going too fast. | `fa-forward` | sky |
-| **Love It** | I love this. | `fa-heart` | pink |
-| **Again** | Please explain that again. | `fa-rotate-left` | lavender |
-| **Idea** | I have an idea. | `fa-lightbulb` | yellow |
-| **Can't See** | I can't see the screen. | `fa-eye-slash` | aqua |
-| **Can't Hear** | I can't hear you. | `fa-volume-xmark` | sage |
+| **Understand** | I understand this. | 👍 thumbs up | mint |
+| **Confused** | I'm confused. | 😵‍💫 spiral eyes | peach |
+| **Too Fast** | You're going too fast. | 🚀 rocket | sky |
+| **Love It** | I love this. | ❤️ red heart | pink |
+| **Again** | Please explain that again. | ☝️ index pointing up | lavender |
+| **Idea** | I have an idea. | 💡 light bulb | yellow |
+| **Can't See** | I can't see the screen. | 🙈 see-no-evil monkey | aqua |
+| **Can't Hear** | I can't hear you. | 🙉 hear-no-evil monkey | sage |
 
 Every reaction has its own hue — the original five pastels could not cover eight without
 repeats, so peach, sage and aqua were added at roughly 25deg, 85deg and 185deg.

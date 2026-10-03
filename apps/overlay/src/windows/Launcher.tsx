@@ -7,7 +7,10 @@ import {
   firewallStatus,
   hideLauncher,
   isDesktop,
+  listDisplays,
   revealPath,
+  setOverlayDisplay,
+  type DisplayInfo,
   showOverlay,
   type FirewallStatus,
 } from '../lib/desktop';
@@ -34,6 +37,9 @@ const JOIN_URL_POLL_MS = 10_000;
  * the same poll runs much faster until it settles.
  */
 const TUNNEL_POLL_MS = 1_500;
+
+/** How often the launcher re-reads the connected screens during a class. */
+const DISPLAY_POLL_MS = 3_000;
 
 /**
  * The end-of-class PDF. The server builds it when the class ends and holds
@@ -68,6 +74,7 @@ export function Launcher() {
   // poll and then resets the session state, which would drop it.
   const [report, setReport] = useState<ReportInfo | null>(null);
   const [downloading, setDownloading] = useState(false);
+  const [displays, setDisplays] = useState<DisplayInfo[]>([]);
   const [starting, setStarting] = useState(false);
   const [firewall, setFirewall] = useState<FirewallStatus>({ supported: false, allowed: true });
   const [fixingFirewall, setFixingFirewall] = useState(false);
@@ -126,6 +133,31 @@ export function Launcher() {
   // which is what a school Wi-Fi almost always is. Re-checked when the window
   // is looked at again, so allowing the rule from Windows' own prompt (or from
   // the button below) clears the notice without a restart.
+  // Which screen the overlay covers is only a question when the desktop is
+  // extended: a single display, or a mirrored projector, is one screen and
+  // there is nothing to ask. Polled while a class is running because the
+  // projector is typically plugged in after the app is already open.
+  const classActive = state.status === 'active';
+  useEffect(() => {
+    if (!classActive) return;
+    const check = () => {
+      if (document.visibilityState === 'visible') void listDisplays().then(setDisplays);
+    };
+    check();
+    const timer = window.setInterval(check, DISPLAY_POLL_MS);
+    window.addEventListener('focus', check);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', check);
+    };
+  }, [classActive]);
+
+  const onPickDisplay = useCallback((id: string) => {
+    void setOverlayDisplay(id)
+      .then(listDisplays)
+      .then(setDisplays);
+  }, []);
+
   useEffect(() => {
     const check = () => void firewallStatus().then(setFirewall);
     check();
@@ -443,6 +475,34 @@ export function Launcher() {
           <p className="lr-pixel text-[10px] text-(--lr-muted)">
             {state.presence} student{state.presence === 1 ? '' : 's'} joined
           </p>
+
+          {/* Only with an extended desktop. The slides are usually on the
+              screen that is not the main one, and the overlay has to be told. */}
+          {displays.length > 1 && (
+            <div className="flex max-w-75 flex-col items-center gap-1.5">
+              <p className="lr-pixel text-[10px] text-(--lr-muted)">SHOW OVERLAY ON</p>
+              <div className="flex flex-wrap justify-center gap-2">
+                {displays.map((d, i) => (
+                  <button
+                    key={d.id}
+                    type="button"
+                    className={d.selected ? 'lr-btn lr-btn-primary' : 'lr-btn'}
+                    aria-pressed={d.selected}
+                    onClick={() => onPickDisplay(d.id)}
+                  >
+                    Screen {i + 1}
+                    {d.primary ? ' (main)' : ''}
+                    <span className="ml-2 text-[10px] opacity-70">
+                      {d.width}×{d.height}
+                    </span>
+                  </button>
+                ))}
+              </div>
+              <p className="lr-text max-w-75 text-center text-[10px] text-(--lr-muted)">
+                Pick the screen your slides are on.
+              </p>
+            </div>
+          )}
 
           <button type="button" className="lr-btn lr-btn-primary" onClick={onStartOverlay}>
             [ Start Overlay ]

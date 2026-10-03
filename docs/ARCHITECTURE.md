@@ -285,8 +285,9 @@ state and re-syncs.
   |  reaction pad          |   field stays focused, retry
   |  6 big blocky buttons  |
   |  (understand/confused/ |
-  |   too_fast/too_slow/   |
-  |   again/idea)   |
+  |   too_fast/love/       |
+  |   again/idea)          |
+  |  + can't see / hear    |
   |                        |
   |  [ ask a question ]    |--> 200-char composer -> question:create
   |  question list w/ votes|--> tap to upvote (once) -> question:vote
@@ -475,6 +476,13 @@ drawing where the slides are not. It is re-snapped on `show_overlay`, and the cu
 poller (already awake at 20 Hz) re-reads the monitor rectangle about once a second and
 corrects only when it actually differs.
 
+Which display is the primary one by default. With the desktop *extended* the slides are
+usually on the other screen, so the launcher lists the screens (`list_displays`) above
+Start Overlay and the professor picks one (`set_overlay_display`). The picker is shown only
+when the OS reports more than one screen — a single display or a mirrored projector is one
+screen, and there is nothing to ask. The pick lasts for the app run and is honoured only
+while that screen is connected; unplug it and `overlay_bounds()` falls back to the primary.
+
 **The panels.** Every panel is placed from `--lr-edge` / `--lr-panel-w` in `index.css`,
 which are `clamp()`s of viewport units — a floor so text stays legible on a small
 screen, a viewport-relative middle so panels grow with the projector, a ceiling so a 4K
@@ -568,21 +576,26 @@ The tables below are the complete contents of `packages/shared/src/protocol.ts`.
   check uses exactly these, which is what makes it one click.
 - `ErrorCode` = `invalid_code`, `session_ended`, `rate_limited`, `duplicate_vote`, `too_long`,
   `empty`, `not_joined`, `bad_request`, `unauthorized`.
-- `REACTION_TYPES` = `understand`, `confused`, `too_fast`, `too_slow`, `again`, `idea`.
-  `REACTION_META` gives each one a `label`, a `meaning` (the sentence shown to students), a
-  Font Awesome free-solid `icon` name, and an `accent` palette key:
+- `REACTION_TYPES` = `understand`, `confused`, `too_fast`, `love`, `cant_see`, `cant_hear`,
+  `again`, `idea`. `REACTION_META` gives each one a `label`, a `meaning` (the sentence shown to
+  students) and an `accent` palette key. Its picture is a 3D emoji (Fluent Emoji, MIT) stored
+  as `packages/shared/assets/emoji/<type>.png`:
 
-  | type | label | meaning | icon | accent |
+  | type | label | meaning | emoji | accent |
   | --- | --- | --- | --- | --- |
-  | `understand` | Understand | I understand this. | `check` | mint |
-  | `confused` | Confused | I'm confused. | `question` | pink |
-  | `too_fast` | Too Fast | You're going too fast. | `forward` | sky |
-  | `too_slow` | Too Slow | You're going too slowly. | `backward` | lavender |
-  | `again` | Again | Please explain that again. | `rotate-left` | sky |
-  | `idea` | Idea | I have an idea. | `lightbulb` | yellow |
+  | `understand` | Understand | I understand this. | thumbs up | mint |
+  | `confused` | Confused | I'm confused. | face with spiral eyes | peach |
+  | `too_fast` | Too Fast | You're going too fast. | rocket | sky |
+  | `love` | Love It | I love this. | red heart | pink |
+  | `again` | Again | Please explain that again. | index pointing up | lavender |
+  | `idea` | Idea | I have an idea. | light bulb | yellow |
+  | `cant_see` | Can't See | I can't see the screen. | see-no-evil monkey | aqua |
+  | `cant_hear` | Can't Hear | I can't hear you. | hear-no-evil monkey | sage |
 
-  Both clients read labels, icons and colours from this one table. Adding a reaction type is a
-  single-file change plus whatever art the icon needs.
+  `cant_see` and `cant_hear` are fault reports (`FAULT_TYPES`), shown apart from the six
+  feelings. The student app, the overlay and the PDF report all read labels and colours from
+  this one table and the picture from that one folder. Adding a reaction type is a
+  single-file change plus one PNG.
 
 ### Session codes (`packages/shared/src/code.ts`)
 
@@ -636,7 +649,7 @@ Per session, per reaction type:
 
 Windows are per type, so a wave of `confused` and a wave of `understand` remain two distinct
 signals arriving on their own cadences. A single reaction in a quiet room still produces one
-burst of `count: 1` after at most 1200ms — that latency is invisible next to the 2200–4000ms
+burst of `count: 1` after at most 1200ms — that latency is invisible next to the 3500–5000ms
 float animation, and it is the price of the room-scale case behaving.
 
 The professor socket therefore sees at most `6 types / 1.2s` ≈ 5 frames/second regardless of
@@ -712,7 +725,7 @@ Floaters must never obscure what the professor is presenting. The screen is divi
   the professor is actually pointing at. Nothing spawns in it and the `--lr-rise` distance is
   chosen so left-zone floaters travel up the margin rather than cutting across it.
 - Each floater gets randomized spawn offset, drift and lifetime within
-  `[reactionFloatMinMs, reactionFloatMaxMs]` (2200–4000ms) so a burst of the same type reads as a
+  `[reactionFloatMinMs, reactionFloatMaxMs]` (3500–5000ms) so a burst of the same type reads as a
   crowd, not a marching column.
 
 ---
@@ -979,11 +992,14 @@ Palette:
 | --- | --- | --- |
 | `--lr-bg` | `#F7F6F1` | Page ground, warm off-white |
 | `--lr-dark` | `#282828` | Ink, borders, shadows |
-| `--lr-sky` | `#A9D8FF` | Primary accent (`too_fast`, `again`, `.lr-btn-primary`) |
-| `--lr-pink` | `#FFB7D5` | Danger / attention (`confused`, `.lr-btn-danger`) |
-| `--lr-lavender` | `#C9B8FF` | `too_slow`, focus ring |
+| `--lr-sky` | `#A9D8FF` | Primary accent (`too_fast`, `.lr-btn-primary`) |
+| `--lr-pink` | `#FFB7D5` | `love` |
+| `--lr-lavender` | `#C9B8FF` | `again`, focus ring |
 | `--lr-mint` | `#ACE8D3` | `understand` |
 | `--lr-yellow` | `#FFE49A` | `idea` |
+| `--lr-peach` | `#FFCBA3` | `confused` |
+| `--lr-aqua` | `#A9E8E8` | `cant_see` |
+| `--lr-sage` | `#CFE8A9` | `cant_hear` |
 | `--lr-muted` | `#6E6A63` | Secondary text |
 | `--lr-line` | `#282828` | Border colour (aliased to ink) |
 | `--lr-surface` | `#FFFFFF` | Card / panel fill |
@@ -1069,7 +1085,7 @@ enforces 5s produces silent failures; sharing the constant makes that impossible
 | `questionMaxChars` | `200` | A question must fit a compact bubble that is legible from the back of a hall and scannable mid-sentence. 200 characters forces one question, not a paragraph. Enforced server-side (`too_long`) and shown as a live counter client-side. |
 | `overlayMaxQuestions` | `5` | The overlay's hard card cap (§7). A product limit, not a technical one: five is what a professor can absorb without stopping. Overflow becomes `+N more`. |
 | `resolveFadeMs` | `600` | A resolved card lingers this long before sliding out, so the click is visibly acknowledged rather than the card just vanishing. |
-| `reactionFloatMinMs` / `reactionFloatMaxMs` | `2200` / `4000` | Floater lifetime range. Long enough to be noticed peripherally while lecturing, short enough that the screen clears between waves. The range is randomised per floater so a burst looks like a crowd. |
+| `reactionFloatMinMs` / `reactionFloatMaxMs` | `3500` / `5000` | Floater lifetime range. Long enough to be noticed peripherally while lecturing, short enough that the screen clears between waves. The range is randomised per floater so a burst looks like a crowd. |
 | `pollResultVisibleMs` | `20000` | Poll results stay expanded 20s, then minimize to a chip. Long enough to read a three-bar tally and react to it; short enough that the professor never has to dismiss it manually to get back to their slides. |
 | `participantTimeoutMs` | `45000` | No traffic for 45s and the participant is dropped, and `presence` re-broadcast. Three missed heartbeats — tolerant of a phone briefly roaming between access points, tight enough that the count reflects the room. |
 | `heartbeatMs` | `15000` | `ping`/`pong` interval on both client types. Keeps intermediaries from idling out the socket and gives the timeout above something to measure. |
