@@ -1127,11 +1127,16 @@ overlay in one glance and one click.
 
 ## 12b. The end-of-class report
 
-`packages/server/src/report.ts` writes a PDF the moment `session:end` arrives — before the
-session is dropped from memory — and hands its path back on the professor's `session:ended`
-frame (never the students'; never over the tunnel, since it is a location in the professor's
-home directory). The launcher, which has already handed off its socket by then, picks the same
-path up from `/api/session/:code`.
+`packages/server/src/report.ts` builds a PDF the moment `session:end` arrives — before the
+session is dropped from memory — and the hub holds the bytes in memory, keyed by class code
+(the last five classes; the session itself is reaped a minute after it ends). Nothing is
+written to disk at that point. The professor's `session:ended` frame says `report: { ready }`
+(never the students' frame); the launcher, which has usually handed off its socket by then,
+learns the same thing from `/api/session/:code`. Its CLASS ENDED screen shows **Download
+Report**, which `POST`s `/api/session/:code/report`; only then does the server write the file,
+into the Downloads folder (`LECTURE_REPORTS_DIR`), and return its path so the launcher can
+offer Show in Folder. Both the `ready` flag and the download endpoint answer loopback only,
+never the tunnel: the endpoint writes into the professor's home directory.
 
 Its raw material is three aggregate series the store now keeps per session: `reactionLog`
 (one row per flushed burst — `burst.ts` has already collapsed thirty taps into one count),

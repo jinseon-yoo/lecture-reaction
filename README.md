@@ -571,9 +571,9 @@ your clicker and your IDE all behave as if it were not running.
 
 ### Ending the class
 
-The moment you end the class, a **PDF report** is written to
-`Documents/Lecture React Reports/` and the launcher shows **Show Report**. It is
-a dashboard of the whole lecture: how many students were there, the reactions
+The moment you end the class, a **PDF report** is prepared and the launcher
+shows **Download Report**. Nothing is saved to your computer until you click it;
+the PDF then lands in your `Downloads` folder. It is a dashboard of the whole lecture: how many students were there, the reactions
 as a timeline so you can see the minute the room stopped following, every
 understanding check with its result, and every question in full — with whether
 you answered it, and when. Nothing in it identifies a student; it is built from
@@ -592,8 +592,10 @@ session.
 
 Everything the overlay shows during a lecture is designed to be glanced at and
 forgotten — reactions float for five seconds, questions leave when answered.
-That is right for the room and useless afterwards. So ending the class writes a
-report: `Documents/Lecture React Reports/Lecture-React-<date>-<time>-<code>.pdf`.
+That is right for the room and useless afterwards. So ending the class builds a
+report, and **Download Report** on the launcher's CLASS ENDED screen saves it as
+`Downloads/Lecture-React-<date>-<time>-<code>.pdf`. It is not saved unless you
+ask: skip the button and the report is gone when the app closes.
 
 What is in it:
 
@@ -616,10 +618,12 @@ vote counts), so the privacy boundary in `docs/ARCHITECTURE.md` §9 is
 unchanged. There is no way to learn who asked or who voted from the PDF because
 the server never told the professor's side either.
 
-It is written by the server the instant the class ends, before the session is
-dropped from memory, in about half a second. If the fonts it needs are missing
-(`LECTURE_FONTS_DIR`, bundled with the app) the launcher says so and the class
-still ends normally. `LECTURE_REPORTS_DIR` overrides where it is written.
+It is built by the server the instant the class ends, before the session is
+dropped from memory, in about half a second, and held in memory until you
+download it (the last five classes are kept while the app stays open). If the
+fonts it needs are missing (`LECTURE_FONTS_DIR`, bundled with the app) the
+launcher says so and the class still ends normally. `LECTURE_REPORTS_DIR`
+overrides the folder a download is saved to.
 
 ## What students see
 

@@ -166,14 +166,14 @@
 /* ---------- motion ---------- */
 
 /*
- * Percentages, against a 5-7.5s `--lr-life` (LIMITS.reactionFloatMinMs).
+ * Percentages, against a 3.5-5s `--lr-life` (LIMITS.reactionFloatMinMs).
  *
  * The entry is deliberately a small share of the whole: the bounce reads as a
  * pop only while it stays around 350-500ms, so it shrinks as a fraction when
  * the life grows. Opacity then holds flat to 68% and fades over the last
  * third, which is what makes a longer life mean "legible for longer" instead
- * of "translucent for longer" - the chip is readable for roughly 4-5s of its
- * dwell rather than fading from the one-fifth mark. The rise spans the full
+ * of "translucent for longer" - the emoji is readable for roughly 2.5-3.5s of
+ * its dwell rather than fading from the one-fifth mark. The rise spans the full
  * duration regardless, so the drift upward is gentler the longer it lives.
  */
 @keyframes lr-float-up {

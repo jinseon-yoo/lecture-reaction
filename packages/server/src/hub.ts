@@ -18,10 +18,11 @@ import {
   type ErrorCode,
   type LimitScope,
   type PollKind,
+  type ClassReportRef,
   type ServerMsg,
 } from '@lr/shared';
 import { BurstAggregator, type Burst } from './burst.js';
-import { writeReport } from './report.js';
+import { buildReportPdf, reportFileName, saveReport } from './report.js';
 import {
   Store,
   buildPollOptions,
@@ -41,6 +42,8 @@ const PRESENCE_DEBOUNCE_MS = 500;
 const POLL_RESULTS_THROTTLE_MS = 200;
 /** How often orphaned / expired sessions are swept. */
 const REAP_INTERVAL_MS = 30_000;
+/** How many finished classes keep their report in memory for download. */
+const MAX_KEPT_REPORTS = 5;
 
 const ERROR_MESSAGES: Record<ErrorCode, string> = {
   invalid_code: 'That class code is not valid.',
@@ -77,6 +80,12 @@ export class Hub {
   private readonly professors = new Map<string, Set<WebSocket>>();
   private readonly students = new Map<string, Set<WebSocket>>();
   private readonly timers = new Map<string, SessionTimers>();
+  /**
+   * Finished reports by class code, waiting for a Download click. Kept here
+   * rather than on the session because the session is reaped a minute after
+   * the class ends and the professor may take longer than that to pack up.
+   */
+  private readonly reports = new Map<string, { name: string; bytes: Uint8Array }>();
 
   private readonly bursts = new BurstAggregator((sessionId, burst) =>
     this.sendBurst(sessionId, burst),
@@ -300,6 +309,20 @@ export class Hub {
     return session;
   }
 
+  /** Whether a finished class has a report waiting to be downloaded. */
+  hasReport(code: string): boolean {
+    return this.reports.has(code);
+  }
+
+  /** The Download click: writes the held report to disk. `null` if there is none. */
+  downloadReport(code: string): { path: string } | { error: string } | null {
+    const held = this.reports.get(code);
+    if (!held) return null;
+    const saved = saveReport(held.name, held.bytes);
+    if ('path' in saved) console.log(`[lecture-react] report saved: ${saved.path}`);
+    return saved;
+  }
+
   private async onSessionEnd(ws: WebSocket, state: ConnState): Promise<void> {
     const session = this.professorSession(ws, state);
     if (!session) return;
@@ -309,19 +332,26 @@ export class Hub {
     this.bursts.clearSession(session.id);
     this.clearTimers(session.id);
 
-    // The report is written before anyone hears `session:ended`, so that the
-    // frame the overlay acts on already says where the PDF is (or why there
-    // is none). It costs the professor about half a second at the end of
+    // The report is built before anyone hears `session:ended`, so that the
+    // frame the overlay acts on already says whether there is one to download
+    // (or why not). It costs the professor about half a second at the end of
     // class; the students' sockets stay open meanwhile but the session is
     // already `ended`, so nothing they send in that window gets through.
-    const report = await writeReport(session, at);
-    if ('path' in report) {
-      session.reportPath = report.path;
-      console.log(`[lecture-react] report written: ${report.path}`);
+    // Built, not saved: it stays in memory until the professor downloads it.
+    let report: ClassReportRef;
+    try {
+      const bytes = await buildReportPdf(session, at);
+      this.reports.set(session.code, { name: reportFileName(session), bytes });
+      // A handful of classes back is plenty; each report is ~1.5 MB.
+      while (this.reports.size > MAX_KEPT_REPORTS) this.reports.delete(this.reports.keys().next().value!);
+      report = { ready: true };
+    } catch (err) {
+      const error = err instanceof Error ? err.message : String(err);
+      console.error(`[lecture-react] report failed: ${error}`);
+      report = { error };
     }
-    // The failure case has already been logged by `writeReport`.
 
-    // Two frames, not one: the path is the professor's home directory.
+    // Two frames, not one: the report is the professor's business only.
     const endedForProfessor: ServerMsg = { t: 'session:ended', at, report };
     for (const sock of this.professors.get(session.id) ?? []) this.safeSend(sock, endedForProfessor);
 

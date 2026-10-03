@@ -79,7 +79,7 @@ export function pickSpawnPoint(
   }
 
   // Never rise into the reserved band from below, and never off the top.
-  const maxRise = Math.max(120, Math.min(best.y - 12, vp.height * 0.32));
+  const maxRise = Math.max(120, Math.min(best.y - 12, vp.height * 0.4));
   return {
     x: clamp(best.x, 8, vp.width * RIGHT_RESERVED - 40),
     y: clamp(best.y, 8, vp.height - 60),

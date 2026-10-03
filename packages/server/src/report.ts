@@ -1,6 +1,7 @@
 /**
- * The end-of-class report: one PDF, written the moment the professor ends the
- * class, before the session is dropped from memory.
+ * The end-of-class report: one PDF, built the moment the professor ends the
+ * class, before the session is dropped from memory. It is held in memory and
+ * only touches the disk if the professor clicks Download Report.
  *
  * Everything the overlay showed during the lecture was designed to be glanced
  * at and forgotten — reactions float for five seconds, questions leave when
@@ -27,9 +28,9 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { PDFDocument, rgb, type PDFFont, type PDFPage, type RGB } from 'pdf-lib';
+import { PDFDocument, rgb, type PDFFont, type PDFImage, type PDFPage, type RGB } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
-import { LIMITS, REACTION_META, isFaultType, type ReactionType } from '@lr/shared';
+import { LIMITS, REACTION_META, REACTION_TYPES, isFaultType, type ReactionType } from '@lr/shared';
 import type { Poll, PresenceSample, Question, Session } from './store.js';
 
 /* ------------------------------------------------------------------ */
@@ -56,13 +57,34 @@ export function resolveFontsDir(): string | null {
 }
 
 /**
- * Where reports go. The desktop app passes the user's Documents folder in;
- * a bare server run lands in the same place by convention so a professor
- * never has to hunt for it.
+ * The reaction emoji, the same pictures the student taps and the overlay
+ * floats. Packaged, they ship as a sibling of the fonts folder; in a source
+ * run they are read from the shared package. Unlike the fonts they are
+ * optional: a report without them still says everything in words.
+ */
+export function resolveEmojiDir(fontsDir = resolveFontsDir()): string | null {
+  const has = (dir: string) => existsSync(join(dir, 'understand.png'));
+  if (fontsDir) {
+    const sibling = join(dirname(fontsDir), 'emoji');
+    if (has(sibling)) return sibling;
+  }
+  try {
+    const repo = resolve(dirname(new URL(import.meta.url).pathname), '../../shared/assets/emoji');
+    if (has(repo)) return repo;
+  } catch {
+    /* packaged: no source tree */
+  }
+  return null;
+}
+
+/**
+ * Where a downloaded report goes: the Downloads folder, like any other
+ * download. The desktop app passes the real one in (localised, redirected);
+ * a bare server run falls back to the conventional place.
  */
 export function resolveReportsDir(): string {
   const override = process.env.LECTURE_REPORTS_DIR?.trim();
-  return override ? resolve(override) : join(homedir(), 'Documents', 'Lecture React Reports');
+  return override ? resolve(override) : join(homedir(), 'Downloads');
 }
 
 /* ------------------------------------------------------------------ */
@@ -246,8 +268,26 @@ class Sheet {
     private readonly doc: PDFDocument,
     readonly regular: PDFFont,
     readonly bold: PDFFont,
+    private readonly emoji: Map<ReactionType, PDFImage> = new Map(),
   ) {
     this.newPage();
+  }
+
+  /**
+   * A reaction's label with its emoji in front, starting at `x` on baseline
+   * `y`. Without the art (emoji folder missing) it is just the label.
+   */
+  reactionLabel(type: ReactionType, o: { x: number; y: number; size: number; bold?: boolean; color?: RGB }): void {
+    const image = this.emoji.get(type);
+    const side = o.size * 1.3;
+    if (image) this.page.drawImage(image, { x: o.x, y: o.y - side * 0.22, width: side, height: side });
+    this.page.drawText(REACTION_META[type].label, {
+      x: image ? o.x + side + 2.5 : o.x,
+      y: o.y,
+      size: o.size,
+      font: o.bold ? this.bold : this.regular,
+      color: o.color ?? INK,
+    });
   }
 
   newPage(): void {
@@ -753,7 +793,7 @@ function drawTimeline(sh: Sheet, session: Session, st: Stats): void {
   for (const type of heatRows) {
     sh.y -= heatRowH;
     const row = cells.get(type)!;
-    sh.page.drawText(REACTION_META[type].label, { x: MARGIN, y: sh.y + 3, size: 7.5, font: sh.regular, color: BODY });
+    sh.reactionLabel(type, { x: MARGIN, y: sh.y + 3, size: 7.5, color: BODY });
     row.forEach((n, i) => {
       const color = n === 0 ? TRACK : mix(PAPER, REACTION_COLOR[type], 0.22 + 0.78 * Math.sqrt(n / cellMax));
       sh.page.drawRectangle({ x: plotX + i * slot + 0.5, y: sh.y + 1, width: Math.max(1, slot - 1), height: heatRowH - 2, color });
@@ -824,8 +864,7 @@ function drawReactionBreakdown(sh: Sheet, session: Session, st: Stats): void {
   sh.y -= 2;
   for (const r of rows) {
     sh.y -= rowH;
-    const meta = REACTION_META[r.type];
-    sh.page.drawText(meta.label, { x: MARGIN, y: sh.y + 3.5, size: 9, font: sh.bold, color: INK });
+    sh.reactionLabel(r.type, { x: MARGIN, y: sh.y + 3.5, size: 9, bold: true });
     roundRect(sh.page, { x: MARGIN + labelW, y: sh.y + 1, w: barW, h: 11, r: 3, color: TRACK });
     roundRect(sh.page, { x: MARGIN + labelW, y: sh.y + 1, w: Math.max(3, (r.n / st.reactionsTotal) * barW), h: 11, r: 3, color: REACTION_COLOR[r.type] });
     sh.page.drawText(`${r.n}  ·  ${pct(r.n, st.reactionsTotal)}%`, { x: MARGIN + labelW + barW + 10, y: sh.y + 3.5, size: 8.5, font: sh.regular, color: INK });
@@ -1065,8 +1104,17 @@ export async function buildReportPdf(session: Session, endedAt = session.endedAt
   doc.setProducer('Lecture React');
   doc.setCreationDate(new Date(endedAt));
 
+  const emoji = new Map<ReactionType, PDFImage>();
+  const emojiDir = resolveEmojiDir(fontsDir);
+  if (emojiDir) {
+    for (const type of REACTION_TYPES) {
+      const file = join(emojiDir, `${type}.png`);
+      if (existsSync(file)) emoji.set(type, await doc.embedPng(readFileSync(file)));
+    }
+  }
+
   const st = computeStats(session, endedAt);
-  const sh = new Sheet(doc, regular, bold);
+  const sh = new Sheet(doc, regular, bold, emoji);
   drawHeader(sh, session, st);
   drawKpis(sh, st);
   drawAtAGlance(sh, st);
@@ -1080,20 +1128,26 @@ export async function buildReportPdf(session: Session, endedAt = session.endedAt
   return doc.save();
 }
 
-/** Writes the report and returns its path. Never throws into the hub. */
-export async function writeReport(session: Session, endedAt: number): Promise<{ path: string } | { error: string }> {
+/** `Lecture-React-2026-09-22-1000-ABCDE.pdf`: sorts by date, names the class. */
+export function reportFileName(session: Session): string {
+  const d = new Date(session.startedAt);
+  return `Lecture-React-${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}-${pad2(d.getHours())}${pad2(d.getMinutes())}-${session.code}.pdf`;
+}
+
+/**
+ * Puts a finished report on disk, and only when the professor asked for it.
+ * Downloading twice overwrites: same class, same bytes, same name.
+ */
+export function saveReport(name: string, bytes: Uint8Array): { path: string } | { error: string } {
   try {
-    const bytes = await buildReportPdf(session, endedAt);
     const dir = resolveReportsDir();
     mkdirSync(dir, { recursive: true });
-    const d = new Date(session.startedAt);
-    const name = `Lecture-React-${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}-${pad2(d.getHours())}${pad2(d.getMinutes())}-${session.code}.pdf`;
     const path = join(dir, name);
     writeFileSync(path, bytes);
     return { path };
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
-    console.error(`[lecture-react] report failed: ${error}`);
+    console.error(`[lecture-react] report could not be saved: ${error}`);
     return { error };
   }
 }

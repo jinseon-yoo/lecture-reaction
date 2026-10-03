@@ -141,8 +141,8 @@ async function tunnelRequest(method: 'POST' | 'DELETE'): Promise<TunnelState> {
 export interface SessionLookup {
   exists: boolean;
   status: 'active' | 'ended';
-  /** Only for an ended class, and only when the server wrote the PDF locally. */
-  report?: { path: string };
+  /** Only for an ended class: the server built the PDF and holds it for download. */
+  report?: { ready: true };
 }
 
 /**
@@ -159,9 +159,25 @@ export async function fetchSessionStatus(code: string): Promise<SessionLookup | 
       exists: data.exists,
       status: data.status === 'ended' ? 'ended' : 'active',
     };
-    if (typeof data.report?.path === 'string') lookup.report = { path: data.report.path };
+    if (data.report?.ready === true) lookup.report = { ready: true };
     return lookup;
   } catch {
     return null;
+  }
+}
+
+/**
+ * The Download Report button: asks the server to write the PDF it has been
+ * holding since the class ended into the Downloads folder. Nothing is saved
+ * before this is called.
+ */
+export async function downloadReport(code: string): Promise<{ path: string } | { error: string }> {
+  try {
+    const res = await fetch(`${serverOrigin()}/api/session/${encodeURIComponent(code)}/report`, { method: 'POST' });
+    const data = (await res.json()) as { path?: unknown; error?: unknown };
+    if (typeof data.path === 'string') return { path: data.path };
+    return { error: typeof data.error === 'string' ? data.error : `server returned ${res.status}` };
+  } catch (err) {
+    return { error: String(err) };
   }
 }

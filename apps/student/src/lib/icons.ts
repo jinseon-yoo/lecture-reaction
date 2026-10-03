@@ -1,30 +1,31 @@
-import type { IconDefinition } from '@fortawesome/fontawesome-svg-core';
-import {
-  faCheck,
-  faEyeSlash,
-  faVolumeXmark,
-  faForward,
-  faHeart,
-  faLightbulb,
-  faQuestion,
-  faRotateLeft,
-} from '@fortawesome/free-solid-svg-icons';
-import { REACTION_META, type PaletteKey, type ReactionType } from '@lr/shared';
+import type { PaletteKey, ReactionType } from '@lr/shared';
+import againEmoji from '@lr/shared/emoji/again.png';
+import cantHearEmoji from '@lr/shared/emoji/cant_hear.png';
+import cantSeeEmoji from '@lr/shared/emoji/cant_see.png';
+import confusedEmoji from '@lr/shared/emoji/confused.png';
+import ideaEmoji from '@lr/shared/emoji/idea.png';
+import loveEmoji from '@lr/shared/emoji/love.png';
+import tooFastEmoji from '@lr/shared/emoji/too_fast.png';
+import understandEmoji from '@lr/shared/emoji/understand.png';
 
-/** Keyed by the free-solid icon names the shared protocol already declares. */
-const ICONS: Record<string, IconDefinition> = {
-  check: faCheck,
-  'eye-slash': faEyeSlash,
-  'volume-xmark': faVolumeXmark,
-  question: faQuestion,
-  forward: faForward,
-  heart: faHeart,
-  'rotate-left': faRotateLeft,
-  lightbulb: faLightbulb,
+/**
+ * The same 3D emoji the overlay floats over the slides, so what a student
+ * taps is what the professor sees. Keyed by type, so a new reaction without
+ * art is a type error.
+ */
+const EMOJI: Record<ReactionType, string> = {
+  understand: understandEmoji,
+  confused: confusedEmoji,
+  too_fast: tooFastEmoji,
+  love: loveEmoji,
+  again: againEmoji,
+  idea: ideaEmoji,
+  cant_see: cantSeeEmoji,
+  cant_hear: cantHearEmoji,
 };
 
-export function reactionIcon(type: ReactionType): IconDefinition {
-  return ICONS[REACTION_META[type].icon] ?? faQuestion;
+export function reactionEmoji(type: ReactionType): string {
+  return EMOJI[type];
 }
 
 /** theme.css accent classes, listed literally so they survive any purge pass. */

@@ -113,8 +113,6 @@ export interface Session {
   presenceLog: PresenceSample[];
   /** Every poll that has been closed, oldest first. `poll` is only the open one. */
   pollHistory: Poll[];
-  /** Where the end-of-class report was written, once it has been. */
-  reportPath?: string;
 }
 
 export type AddQuestionResult =

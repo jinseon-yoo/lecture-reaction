@@ -22,7 +22,7 @@ import type { ConnectionState } from '../lib/socket';
 import type { OverlaySettings } from '../lib/settings';
 import { REACTION_META, type ReactionType, type ReactionZone } from '@lr/shared';
 import { clamp } from '../lib/spawn';
-import { reactionIcon } from '../lib/icons';
+import { reactionEmoji } from '../lib/icons';
 import { readJson, STORAGE_KEYS, writeJson } from '../lib/storage';
 import { PollComposer } from './PollComposer';
 import { Popup } from './Popup';
@@ -387,7 +387,7 @@ export function ControlStrip(props: ControlStripProps) {
               style={{ background: `var(--lr-${REACTION_META[props.surge].accent})` }}
               role="status"
             >
-              <FontAwesomeIcon icon={reactionIcon(props.surge)} />
+              <img src={reactionEmoji(props.surge)} alt="" className="h-[1.5em] w-[1.5em]" />
               {REACTION_META[props.surge].label}
             </span>
           )}

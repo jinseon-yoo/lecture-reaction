@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import {
   FAULT_TYPES,
   REACTION_META,
@@ -7,7 +6,7 @@ import {
   isFaultType,
   type ReactionType,
 } from '@lr/shared';
-import { accentClass, reactionIcon } from '../lib/icons';
+import { accentClass, reactionEmoji } from '../lib/icons';
 import { useCooldown } from '../lib/hooks';
 
 interface Props {
@@ -58,10 +57,11 @@ export function ReactionGrid({ onSend, cooldownUntil, disabled }: Props) {
                 meta.accent,
               )} ${cooling && !disabled ? 'lr-cooling' : ''}`}
             >
-              <FontAwesomeIcon
-                icon={reactionIcon(type)}
-                className="text-[26px] lg:text-[30px]"
-                aria-hidden="true"
+              <img
+                src={reactionEmoji(type)}
+                alt=""
+                draggable={false}
+                className="h-10 w-10 lg:h-11 lg:w-11"
               />
               <span className="font-pixel text-[10px] leading-tight text-lr-dark">{meta.label}</span>
               {cooling && (
@@ -96,10 +96,11 @@ export function ReactionGrid({ onSend, cooldownUntil, disabled }: Props) {
                 meta.accent,
               )} ${cooling && !disabled ? 'lr-cooling' : ''}`}
             >
-              <FontAwesomeIcon
-                icon={reactionIcon(type)}
-                className="text-[20px] lg:text-[22px]"
-                aria-hidden="true"
+              <img
+                src={reactionEmoji(type)}
+                alt=""
+                draggable={false}
+                className="h-7 w-7 lg:h-8 lg:w-8"
               />
               <span className="font-pixel text-[10px] leading-tight text-lr-dark">
                 {meta.label}

@@ -28,6 +28,8 @@ cpSync(join(REPO, `apps/overlay/src-tauri/binaries/lr-server-${target}.exe`), jo
 cpSync(join(REPO, `apps/overlay/src-tauri/binaries/cloudflared-${target}.exe`), join(output, 'cloudflared.exe'));
 // Also beside lr-server.exe: the Korean fonts the end-of-class PDF report is set in.
 cpSync(join(REPO, 'packages/server/assets/fonts'), join(output, 'fonts'), { recursive: true });
+// And beside the fonts: the reaction emoji the report draws next to each label.
+cpSync(join(REPO, 'packages/shared/assets/emoji'), join(output, 'emoji'), { recursive: true });
 cpSync(join(REPO, 'apps/student/dist'), join(output, 'student'), { recursive: true });
 writeFileSync(join(output, 'portable.txt'), 'Store WebView2 settings in the adjacent Data folder.\r\n');
 // The app offers the same rule from the launcher, but a locked-down machine may

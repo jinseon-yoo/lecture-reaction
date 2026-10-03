@@ -168,17 +168,17 @@ export type ErrorCode =
  */
 export type LimitScope = 'reaction' | 'question' | 'vote' | 'poll';
 
-/** Where the end-of-class PDF landed — or why it did not. */
-export type ClassReportRef = { path: string; error?: undefined } | { path?: undefined; error: string };
+/** The end-of-class PDF is ready to download — or why there is none. */
+export type ClassReportRef = { ready: true; error?: undefined } | { ready?: undefined; error: string };
 
 export type ServerMsg =
   /* both */
   | { t: 'error'; code: ErrorCode; message: string; scope?: LimitScope }
   | { t: 'pong' }
   /**
-   * `report` is professor-only and never crosses the tunnel: it is a path on
-   * the professor's own disk. Absent while a report is still being written,
-   * `{ error }` if it could not be.
+   * `report` is professor-only: whether the PDF was built and can be
+   * downloaded from the launcher, or `{ error }` if it could not be. Nothing
+   * is saved until the professor asks for it.
    */
   | { t: 'session:ended'; at: number; report?: ClassReportRef }
   /* professor */
@@ -220,15 +220,15 @@ export const LIMITS = {
    * Floating reaction lifetime on the overlay.
    *
    * A reaction is glanced at, not read: the professor is mid-sentence and
-   * catches it peripherally. At 3-5s a chip that appeared while they were
-   * turned toward the board was gone before they turned back, so the signal
-   * was sent and never received. These are the dwell times, and `lr-float-up`
-   * is timed against them — its bounce-in and its fade are percentages, so
-   * the two have to be changed together or a longer life just means a
-   * slower, mushier animation.
+   * catches it peripherally. The small flat chips needed 5-7.5s to be caught;
+   * the 3D emoji are larger and louder, and at that life they crawled, so
+   * the dwell is shorter and the rise longer (see `pickSpawnPoint`). These
+   * are the dwell times, and `lr-float-up` is timed against them — its
+   * bounce-in and its fade are percentages, so the two have to be changed
+   * together or a longer life just means a slower, mushier animation.
    */
-  reactionFloatMinMs: 5000,
-  reactionFloatMaxMs: 7500,
+  reactionFloatMinMs: 3500,
+  reactionFloatMaxMs: 5000,
   /** Poll results stay expanded this long, then minimize. */
   pollResultVisibleMs: 20000,
   /**

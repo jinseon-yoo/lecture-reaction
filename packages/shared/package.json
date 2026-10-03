@@ -4,7 +4,7 @@
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
-  "exports": { ".": "./src/index.ts", "./theme.css": "./src/theme.css" },
+  "exports": { ".": "./src/index.ts", "./theme.css": "./src/theme.css", "./emoji/*": "./assets/emoji/*" },
   "scripts": { "build": "tsc -p tsconfig.json --noEmit false --emitDeclarationOnly", "typecheck": "tsc --noEmit" },
   "devDependencies": { "typescript": "^5.7.3" }
 }

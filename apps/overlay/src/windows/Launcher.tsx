@@ -13,6 +13,7 @@ import {
 } from '../lib/desktop';
 import {
   fetchJoinInfo,
+  downloadReport,
   fetchSessionStatus,
   joinUrl,
   startTunnel,
@@ -34,13 +35,18 @@ const JOIN_URL_POLL_MS = 10_000;
  */
 const TUNNEL_POLL_MS = 1_500;
 
-/** The end-of-class PDF: where it went, or why there is none. */
+/**
+ * The end-of-class PDF. The server builds it when the class ends and holds
+ * it; `path` only exists once the professor has clicked Download Report.
+ */
 interface ReportInfo {
+  /** The class it belongs to — the session state is reset before the click. */
+  code?: string;
   path?: string;
   error?: string;
 }
 
-/** `/Users/x/Documents/Lecture React Reports/foo.pdf` -> `foo.pdf`, on either slash. */
+/** `/Users/x/Downloads/foo.pdf` -> `foo.pdf`, on either slash. */
 function baseName(path: string): string {
   return path.split(/[\\/]/).pop() ?? path;
 }
@@ -61,6 +67,7 @@ export function Launcher() {
   // Kept locally because the hand-off path learns about the report from a
   // poll and then resets the session state, which would drop it.
   const [report, setReport] = useState<ReportInfo | null>(null);
+  const [downloading, setDownloading] = useState(false);
   const [starting, setStarting] = useState(false);
   const [firewall, setFirewall] = useState<FirewallStatus>({ supported: false, allowed: true });
   const [fixingFirewall, setFixingFirewall] = useState(false);
@@ -156,7 +163,7 @@ export function Launcher() {
           setHandedOff(false);
           setStarting(false);
           // Before reset(): the report only exists in this response.
-          setReport(result.report ? { path: result.report.path } : null);
+          setReport(result.report ? { code } : null);
           reset();
           setEnded(true);
         }
@@ -173,8 +180,18 @@ export function Launcher() {
 
   // Socket still attached: the `session:ended` message carried the report.
   useEffect(() => {
-    if (state.status === 'ended') setReport(state.report);
-  }, [state.status, state.report]);
+    if (state.status !== 'ended' || !state.report) return;
+    setReport(state.report.ready && state.code ? { code: state.code } : { error: state.report.error });
+  }, [state.status, state.report, state.code]);
+
+  const onDownload = useCallback(() => {
+    const code = report?.code;
+    if (!code) return;
+    setDownloading(true);
+    void downloadReport(code)
+      .then((saved) => setReport('path' in saved ? { code, path: saved.path } : { code, error: saved.error }))
+      .finally(() => setDownloading(false));
+  }, [report?.code]);
 
   const classEnded = ended || state.status === 'ended';
 
@@ -248,25 +265,32 @@ export function Launcher() {
             [ START CLASS ]
           </button>
 
-          {/* The PDF the server wrote on the way out. Revealing it is a
-              desktop call, so in browser review mode the button is inert. */}
+          {/* The server holds the PDF; nothing is on disk until this is
+              clicked. Clicking again after an error retries. */}
+          {report?.code && !report.path && (
+            <button type="button" className="lr-btn" onClick={onDownload} disabled={downloading}>
+              {downloading ? '[ Downloading… ]' : '[ Download Report ]'}
+            </button>
+          )}
+          {/* Revealing it is a desktop call, so in browser review mode the
+              button is inert. */}
           {report?.path && (
             <div className="flex max-w-75 flex-col items-center gap-1.5">
               <p className="lr-text max-w-75 break-all text-center text-[10px] text-(--lr-muted)">
-                Report saved: {baseName(report.path)}
+                Saved to Downloads: {baseName(report.path)}
               </p>
               <button
                 type="button"
                 className="lr-btn"
                 onClick={() => report.path && void revealPath(report.path)}
               >
-                [ Show Report ]
+                [ Show in Folder ]
               </button>
             </div>
           )}
           {report?.error && (
             <p className="lr-text max-w-75 text-center text-[10px] text-(--lr-muted)">
-              Report could not be written: {report.error}
+              Report unavailable: {report.error}
             </p>
           )}
         </>

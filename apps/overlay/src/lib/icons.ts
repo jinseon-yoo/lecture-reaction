@@ -1,52 +1,20 @@
-/**
- * REACTION_META names Font Awesome free-solid icons as strings; the React
- * component needs the icon objects. One explicit table, so an unknown name is
- * a type error rather than a blank chip.
- */
-
-import type { IconDefinition } from '@fortawesome/fontawesome-svg-core';
-import {
-  faCheck,
-  faEyeSlash,
-  faVolumeXmark,
-  faForward,
-  faHeart,
-  faLightbulb,
-  faQuestion,
-  faRotateLeft,
-} from '@fortawesome/free-solid-svg-icons';
-import { REACTION_META, type PaletteKey, type ReactionType } from '@lr/shared';
-import againEmoji from '../assets/emoji/again.png';
-import cantHearEmoji from '../assets/emoji/cant_hear.png';
-import cantSeeEmoji from '../assets/emoji/cant_see.png';
-import confusedEmoji from '../assets/emoji/confused.png';
-import ideaEmoji from '../assets/emoji/idea.png';
-import loveEmoji from '../assets/emoji/love.png';
-import tooFastEmoji from '../assets/emoji/too_fast.png';
-import understandEmoji from '../assets/emoji/understand.png';
-
-const BY_NAME: Record<string, IconDefinition> = {
-  check: faCheck,
-  'eye-slash': faEyeSlash,
-  'volume-xmark': faVolumeXmark,
-  question: faQuestion,
-  forward: faForward,
-  heart: faHeart,
-  'rotate-left': faRotateLeft,
-  lightbulb: faLightbulb,
-};
-
-export function reactionIcon(type: ReactionType): IconDefinition {
-  return BY_NAME[REACTION_META[type].icon] ?? faQuestion;
-}
+import type { PaletteKey, ReactionType } from '@lr/shared';
+import againEmoji from '@lr/shared/emoji/again.png';
+import cantHearEmoji from '@lr/shared/emoji/cant_hear.png';
+import cantSeeEmoji from '@lr/shared/emoji/cant_see.png';
+import confusedEmoji from '@lr/shared/emoji/confused.png';
+import ideaEmoji from '@lr/shared/emoji/idea.png';
+import loveEmoji from '@lr/shared/emoji/love.png';
+import tooFastEmoji from '@lr/shared/emoji/too_fast.png';
+import understandEmoji from '@lr/shared/emoji/understand.png';
 
 /**
- * The floating layer draws full-colour 3D emoji instead of the flat icons: on
- * top of a slide a colourful shape is recognised faster than a glyph in a
- * chip. Bundled PNGs (Fluent Emoji, see assets/emoji/LICENSE.md) rather than
- * the system font, so macOS and Windows show the same picture and the app
- * needs no network. Keyed by type, so a new reaction without art is a type
- * error.
+ * Reactions are drawn as full-colour 3D emoji, the same picture on the
+ * student's button and floating over the slide, so the room and the lectern
+ * share one vocabulary. Bundled PNGs (Fluent Emoji, see
+ * packages/shared/assets/emoji/LICENSE.md) rather than the system font, so
+ * macOS and Windows show the same picture and the app needs no network.
+ * Keyed by type, so a new reaction without art is a type error.
  */
 const EMOJI: Record<ReactionType, string> = {
   understand: understandEmoji,

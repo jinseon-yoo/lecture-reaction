@@ -129,15 +129,27 @@ function handleHttp(req: IncomingMessage, res: ServerResponse): void {
     return json(res, 405, { error: 'method_not_allowed' });
   }
 
+  // The Download Report button. The report is held in memory from the moment
+  // the class ends and written to the Downloads folder only on this request.
+  // It writes into the professor's home directory, so loopback only.
+  const reportMatch = /^\/api\/session\/([^/]+)\/report$/.exec(pathname);
+  if (reportMatch) {
+    if (viaTunnel(req)) return json(res, 404, { error: 'not_found' });
+    if (req.method !== 'POST') return json(res, 405, { error: 'method_not_allowed' });
+    const saved = hub.downloadReport(normalizeCode(decodeURIComponent(reportMatch[1]!)));
+    if (!saved) return json(res, 404, { error: 'no_report' });
+    return json(res, 'path' in saved ? 200 : 500, saved);
+  }
+
   if (pathname.startsWith('/api/session/')) {
     // Fast pre-check for the student page. Leaks nothing but existence/status.
     const code = normalizeCode(decodeURIComponent(pathname.slice('/api/session/'.length)));
     const session = code ? hub.store.getByCode(code) : undefined;
-    if (!session) return json(res, 200, { exists: false, status: 'unknown' });
-    // The report path is a location in the professor's home directory. The
-    // overlay asks for it over loopback; nobody arriving through the tunnel
-    // has any business with it.
-    const report = !viaTunnel(req) && session.reportPath ? { path: session.reportPath } : undefined;
+    // Whether a report is waiting is the professor's business: the overlay
+    // asks over loopback, and nobody arriving through the tunnel is told. It
+    // outlives the session, which is reaped a minute after the class ends.
+    const report = code && !viaTunnel(req) && hub.hasReport(code) ? { ready: true } : undefined;
+    if (!session) return json(res, 200, { exists: false, status: 'unknown', ...(report ? { report } : {}) });
     return json(res, 200, {
       exists: session.status === 'active',
       status: session.status,
@@ -223,7 +235,7 @@ httpServer.listen(PORT, HOST, () => {
       ? `[lecture-react] serving student app from ${STUDENT_DIST}`
       : '[lecture-react] student app not built yet (apps/student/dist missing)',
   );
-  console.log(`[lecture-react] reports: ${resolveReportsDir()}`);
+  console.log(`[lecture-react] downloaded reports go to: ${resolveReportsDir()}`);
   // Said now rather than at the end of class, when it is too late to fix.
   if (resolveFontsDir() === null) {
     console.warn('[lecture-react] report fonts not found — end-of-class reports will fail (set LECTURE_FONTS_DIR)');

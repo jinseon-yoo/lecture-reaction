@@ -50,7 +50,8 @@
     ],
     "resources": {
       "../../../apps/student/dist": "student",
-      "../../../packages/server/assets/fonts": "fonts"
+      "../../../packages/server/assets/fonts": "fonts",
+      "../../../packages/shared/assets/emoji": "emoji"
     }
   }
 }

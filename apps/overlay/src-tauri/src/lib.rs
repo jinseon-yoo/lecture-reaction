@@ -431,15 +431,12 @@ fn start_server(app: &AppHandle) -> Option<std::process::Child> {
     let resources = app.path().resource_dir().ok();
     let student_dist = resources.as_ref().map(|dir| dir.join("student"));
     let fonts_dir = resources.as_ref().map(|dir| dir.join("fonts"));
-    // Where the PDF lands. The server defaults to the same folder under the
-    // home directory, but the OS knows better where "Documents" actually is
-    // (localised, redirected, on a USB profile). Skipped when the lookup
-    // fails; the server's own default takes over.
-    let reports_dir = app
-        .path()
-        .document_dir()
-        .map(|dir| dir.join("Lecture React Reports"))
-        .ok();
+    // Where the PDF lands when the professor clicks Download Report. The
+    // server defaults to `Downloads` under the home directory, but the OS
+    // knows better where that actually is (localised, redirected, on a USB
+    // profile). Skipped when the lookup fails; the server's own default takes
+    // over.
+    let reports_dir = app.path().download_dir().ok();
 
     let mut cmd = std::process::Command::new(&binary);
     cmd.env("PORT", SERVER_PORT.to_string());
@@ -580,7 +577,7 @@ fn allow_firewall() -> Result<(), String> {
 
 /// Shows the file in the OS file manager, selected where the platform can.
 ///
-/// The end-of-class report is written by the server, not by this process, so
+/// A downloaded report is written by the server, not by this process, so
 /// the frontend only ever has a path. Selecting it in Finder/Explorer is the
 /// one gesture that works for "where did it go?" without opening a PDF viewer
 /// over the slides.
