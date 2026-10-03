@@ -162,8 +162,18 @@ sentiment grid, they **stay visible in Quiet Mode** when sentiment is hidden, an
 surge from just two students, because if two people cannot hear then nobody in the back row
 can.
 
-All eight are defined once in `REACTION_META` in `packages/shared`; the server, the student app
-and the overlay all derive from it, so adding or changing one is a single edit.
+The pictures are full-colour 3D emoji rather than flat icons: over a slide, a colourful shape
+is recognised faster than a glyph in a box. They are PNGs from Microsoft's
+[Fluent Emoji](https://github.com/microsoft/fluentui-emoji) set (MIT licence, copy in
+`packages/shared/assets/emoji/LICENSE.md`), bundled with the app so macOS and Windows show the
+same picture and nothing is fetched at run time. The same eight files are used everywhere a
+reaction appears — the student's buttons, the floaters and surge badge on the overlay, and the
+labels in the PDF report — so what a student taps is what the professor sees.
+
+All eight are defined once in `REACTION_META` in `packages/shared`, with one image each in
+`packages/shared/assets/emoji/<type>.png`; the server, the student app and the overlay all
+derive from those, so adding a reaction is one edit plus one PNG, and changing a picture is
+replacing one file.
 
 ## Repo layout
 
@@ -171,11 +181,14 @@ and the overlay all derive from it, so adding or changing one is a single edit.
 lecture-reaction/
 ├── packages/
 │   ├── shared/      protocol.ts (wire types + LIMITS + REACTION_META),
-│   │                code.ts (class-code generation/normalisation),
-│   │                theme.css (retro pixel design tokens)
+│   │   │            code.ts (class-code generation/normalisation),
+│   │   │            theme.css (retro pixel design tokens)
+│   │   └── assets/emoji/  the eight reaction emoji (Fluent Emoji 3D, MIT)
 │   └── server/      Node 20 + ws realtime server; also serves the student app
-│       │            tunnel.ts drives the outbound cloudflared tunnel
-│       └── test/        smoke.mjs, simulate-class.mjs, lan.mjs
+│       │            tunnel.ts drives the outbound cloudflared tunnel,
+│       │            report.ts builds the end-of-class PDF
+│       ├── assets/fonts/  the fonts the PDF report is set in
+│       └── test/        smoke.mjs, simulate-class.mjs, lan.mjs, report.mjs
 ├── apps/
 │   ├── student/     Vite + React web app — what students open on their phone
 │   └── overlay/     Tauri v2 + React — the professor's desktop overlay
@@ -215,6 +228,15 @@ pnpm desktop     # ← run the actual product: realtime server + professor deskt
 `pnpm desktop` is the one you want. It starts the realtime server *and* the Tauri
 desktop app together, which matters: `pnpm tauri dev` on its own launches the
 overlay with no server to talk to, and it will sit there failing to connect.
+
+> **`pnpm desktop` is a development mode — do not teach a real class with it.**
+> Its server runs in watch mode: saving any file under `packages/server` or
+> `packages/shared` restarts it, and a restart drops the running class, every
+> question in it and the end-of-class report. The launcher then shows CLASS ENDED
+> with no **Download Report** button, because there is no longer a report to
+> offer. For an actual lecture, use the packaged app
+> ([Building a double-clickable app](#building-a-double-clickable-app)), whose
+> server does not watch anything.
 
 The other modes:
 
@@ -503,9 +525,9 @@ slide backdrop instead of a transparent window.
 
 ### Before the class
 
-```bash
-pnpm desktop
-```
+Open the packaged **Lecture React** app (or, while developing, run `pnpm desktop`
+— but see the warning under [Running it](#running-it) before using that in front
+of a class).
 
 Two things start: the realtime server, and a small **launcher** window.
 
@@ -531,6 +553,11 @@ It needs a few seconds at startup; the QR appears once the address is settled.
    correct even if you join the room's Wi-Fi after starting the app.
 3. Watch `N students joined` climb. When the room is in, click **Start Overlay**.
    The launcher gets out of the way and the transparent overlay takes over.
+4. If the projector *extends* your desktop instead of mirroring it, the launcher
+   shows **SHOW OVERLAY ON** with one button per screen. Pick the screen your
+   slides are on. With a single display, or a mirrored projector, there is nothing
+   to choose and the buttons do not appear. Unplug the chosen screen and the
+   overlay comes back to the main display.
 
 If you would rather say it out loud than show a QR, the code deliberately contains no
 `O`, `0`, `I`, `1` or `L`, so there is nothing ambiguous to say aloud — and if a
@@ -556,13 +583,13 @@ your clicker and your IDE all behave as if it were not running.
 
 | You want to | Do this |
 | --- | --- |
-| See how the room is doing | Nothing. Reactions rise from the bottom band. A wave of the same reaction arrives as one icon with a count (`? x 14`), not fourteen icons. |
+| See how the room is doing | Nothing. Reactions rise from the bottom band. Each one is a 3D emoji that floats up for a few seconds and fades. A wave of the same reaction arrives as one emoji with a count (`×14`), not fourteen emoji. |
 | Answer a question | Read the cards down the right edge — newest at the bottom, most-upvoted highlighted. Click the checkmark when you have answered it; the card fades and slides away, and the student who asked sees `Answered`. |
 | Ask if they are following | Click **? Ask Class**. Every phone gets *Got it / Almost / Lost*, and the tally appears on your overlay within a second. It stays up for 20 seconds, then minimizes itself. |
 | Ask something specific | Alt-click (or long-press) **? Ask Class** for a quick poll composer: a question and 2-4 options. It is deliberately small — this is not a survey tool. |
 | Show a question to the room | Click the **expand** arrows on a question card, just left of its checkmark. That question fills the middle of the screen at projector size, with its vote count and an Answered button. Shrink it back with the same control. |
 | Show the result to the room | Click the **expand** arrows in the results panel's top-right corner. The tally pops out to the middle of the screen at projector size, so the back row can read it off the wall. Click the same button to send it back to the corner. While it is expanded it will not auto-minimize — it stays until you put it away. |
-| Know when something is wrong | Watch for the control strip to highlight with a named badge (`? Confused`, `Can't Hear`). It fires when a reaction reaches ~30% of the class, so you catch a spike peripherally instead of watching floaters while you talk. |
+| Know when something is wrong | Watch for the control strip to highlight with a named badge — the reaction's emoji and name (`Confused`, `Can't Hear`). It fires when a reaction reaches ~30% of the class, so you catch a spike peripherally instead of watching floaters while you talk. |
 | Hide reactions for a moment | Click **Reactions**, or press `CmdOrCtrl+Shift+H`. Reactions keep being collected and counted, they just stop moving on screen. Useful during a video, a demo, or an exam. `Can't See` / `Can't Hear` still show through — hiding a fault report would defeat the point. |
 | Let a latecomer in | Open the gear menu: **Copy Link** and **Show QR** are there too, so you never have to dig the launcher back out mid-lecture. |
 | Move reactions somewhere else | Gear menu -> Reaction Position: Bottom (default), Left, or Both. |
@@ -571,27 +598,27 @@ your clicker and your IDE all behave as if it were not running.
 
 ### Ending the class
 
-The moment you end the class, a **PDF report** is prepared and the launcher
-shows **Download Report**. Nothing is saved to your computer until you click it;
-the PDF then lands in your `Downloads` folder. It is a dashboard of the whole lecture: how many students were there, the reactions
-as a timeline so you can see the minute the room stopped following, every
-understanding check with its result, and every question in full — with whether
-you answered it, and when. Nothing in it identifies a student; it is built from
-the same aggregate counts the overlay received. See
-[After the class](#after-the-class).
-
-
 Click **End Class** on the strip and confirm. Every student immediately gets
 `Class ended. Thanks for participating.`, the code stops working, and the overlay
 closes. Starting another class generates a different code; nothing carries over.
 
-Nothing is stored. Reactions were never written down, and the questions go with the
-session.
+The moment you end the class, a **PDF report** is prepared and the launcher
+shows **Download Report**. Nothing is saved to your computer until you click it;
+the PDF then lands in your `Downloads` folder, and the button turns into
+**Show in Folder**. It is a dashboard of the whole lecture: how many students
+were there, the reactions as a timeline so you can see the minute the room
+stopped following, every understanding check with its result, and every question
+in full — with whether you answered it, and when. Nothing in it identifies a
+student; it is built from the same aggregate counts the overlay received. See
+[After the class](#after-the-class).
+
+Apart from a report you choose to download, nothing is stored. Reactions were
+never written down per student, and the questions go with the session.
 
 ## After the class
 
 Everything the overlay shows during a lecture is designed to be glanced at and
-forgotten — reactions float for five seconds, questions leave when answered.
+forgotten — reactions float for a few seconds, questions leave when answered.
 That is right for the room and useless afterwards. So ending the class builds a
 report, and **Download Report** on the launcher's CLASS ENDED screen saves it as
 `Downloads/Lecture-React-<date>-<time>-<code>.pdf`. It is not saved unless you
@@ -599,17 +626,29 @@ ask: skip the button and the report is gone when the app closes.
 
 What is in it:
 
-- **The numbers.** Peak students, total reactions and reactions per student,
-  questions asked and answered, checks run.
+- **The numbers.** Students, total reactions (per minute and per student),
+  questions asked and answered, checks and polls run.
+- **At a glance.** A few sentences that read the class for you: the share of
+  reactions that said the room was following, the roughest stretch and what
+  drove it, how the understanding checks moved, and what is left to follow up.
 - **The room over time.** One bar per minute (wider buckets for a long lecture)
   of *following* (understand, love it, idea) against *struggling*
-  (confused, too fast, again), the connected-student count as a line, and a tick
-  wherever a check was run. This is the chart that answers "when did I lose them".
-- **Reactions**, by type, with counts and share.
-- **Every understanding check and poll**, with the time it ran and each option's
-  share of the answers.
+  (confused, too fast, again), the connected-student count as a line, a tick
+  wherever a check was run, and the roughest stretch shaded. Under it, the same
+  timeline as a heat strip per reaction type. This is the chart that answers
+  "when did I lose them".
+- **Reactions**, by type, with counts, share and each one's busiest minute.
+- **Key moments, in order.** Surges, questions, checks and fault reports on one
+  timeline.
+- **Every understanding check and poll**, with the time it ran, each option's
+  share of the answers, and how the room was reacting just before.
 - **Every question**, most voted first, in full, with when it was asked and
   whether — and when — it was answered. Unanswered ones are flagged.
+- **Minute by minute.** The whole class as a table, for when you want the exact
+  count rather than the shape.
+
+Reactions are labelled with the same emoji the students tapped, so the report
+reads like the overlay did.
 
 What is deliberately not in it: anything about an individual student. The
 report is generated from the same aggregate material the overlay received
@@ -622,8 +661,10 @@ It is built by the server the instant the class ends, before the session is
 dropped from memory, in about half a second, and held in memory until you
 download it (the last five classes are kept while the app stays open). If the
 fonts it needs are missing (`LECTURE_FONTS_DIR`, bundled with the app) the
-launcher says so and the class still ends normally. `LECTURE_REPORTS_DIR`
-overrides the folder a download is saved to.
+launcher says so and the class still ends normally. The emoji are optional: they
+ship in an `emoji` folder beside the fonts, and without them the report is the
+same with text labels only. `LECTURE_REPORTS_DIR` overrides the folder a download
+is saved to.
 
 ## What students see
 
@@ -635,9 +676,9 @@ two, with the class's questions alongside the reaction pad instead of far below 
    ------------------------------------------------
    HOW IS THE LECTURE GOING?
 
-   [ v Understand ] [ ? Confused  ] [ >> Too Fast ]
-   [ <3 Love It   ] [ <- Again    ] [ !  Idea        ]
-   [ (x) Can't See      ] [ <x) Can't Hear         ]
+   [ 👍 Understand ] [ 😵‍💫 Confused ] [ 🚀 Too Fast ]
+   [ ❤️ Love It    ] [ ☝️ Again    ] [ 💡 Idea     ]
+   [ 🙈 Can't See        ] [ 🙉 Can't Hear        ]
 
    You're anonymous - your professor sees reactions,
    never who sent them.
