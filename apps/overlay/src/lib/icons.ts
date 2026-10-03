@@ -20,7 +20,7 @@ import againEmoji from '../assets/emoji/again.png';
 import cantHearEmoji from '../assets/emoji/cant_hear.png';
 import cantSeeEmoji from '../assets/emoji/cant_see.png';
 import confusedEmoji from '../assets/emoji/confused.png';
-import interestingEmoji from '../assets/emoji/interesting.png';
+import ideaEmoji from '../assets/emoji/idea.png';
 import loveEmoji from '../assets/emoji/love.png';
 import tooFastEmoji from '../assets/emoji/too_fast.png';
 import understandEmoji from '../assets/emoji/understand.png';
@@ -54,7 +54,7 @@ const EMOJI: Record<ReactionType, string> = {
   too_fast: tooFastEmoji,
   love: loveEmoji,
   again: againEmoji,
-  interesting: interestingEmoji,
+  idea: ideaEmoji,
   cant_see: cantSeeEmoji,
   cant_hear: cantHearEmoji,
 };

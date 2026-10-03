@@ -24,7 +24,7 @@ export const REACTION_TYPES = [
   'cant_see',
   'cant_hear',
   'again',
-  'interesting',
+  'idea',
 ] as const;
 
 export type ReactionType = (typeof REACTION_TYPES)[number];
@@ -54,7 +54,7 @@ export const REACTION_META: Record<
   too_fast:    { label: 'Too Fast',    meaning: "You're going too fast.",     icon: 'forward',      accent: 'sky' },
   love:        { label: 'Love It',     meaning: 'I love this.',               icon: 'heart',        accent: 'pink' },
   again:       { label: 'Again',       meaning: 'Please explain that again.', icon: 'rotate-left',  accent: 'lavender' },
-  interesting: { label: 'Idea',        meaning: 'I have an idea.',            icon: 'lightbulb',    accent: 'yellow' },
+  idea:        { label: 'Idea',        meaning: 'I have an idea.',            icon: 'lightbulb',    accent: 'yellow' },
   cant_see:    { label: "Can't See",   meaning: "I can't see the screen.",    icon: 'eye-slash',    accent: 'aqua' },
   cant_hear:   { label: "Can't Hear",  meaning: "I can't hear you.",          icon: 'volume-xmark', accent: 'sage' },
 };

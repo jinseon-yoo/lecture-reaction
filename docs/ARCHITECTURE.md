@@ -286,7 +286,7 @@ state and re-syncs.
   |  6 big blocky buttons  |
   |  (understand/confused/ |
   |   too_fast/too_slow/   |
-  |   again/interesting)   |
+  |   again/idea)   |
   |                        |
   |  [ ask a question ]    |--> 200-char composer -> question:create
   |  question list w/ votes|--> tap to upvote (once) -> question:vote
@@ -568,7 +568,7 @@ The tables below are the complete contents of `packages/shared/src/protocol.ts`.
   check uses exactly these, which is what makes it one click.
 - `ErrorCode` = `invalid_code`, `session_ended`, `rate_limited`, `duplicate_vote`, `too_long`,
   `empty`, `not_joined`, `bad_request`, `unauthorized`.
-- `REACTION_TYPES` = `understand`, `confused`, `too_fast`, `too_slow`, `again`, `interesting`.
+- `REACTION_TYPES` = `understand`, `confused`, `too_fast`, `too_slow`, `again`, `idea`.
   `REACTION_META` gives each one a `label`, a `meaning` (the sentence shown to students), a
   Font Awesome free-solid `icon` name, and an `accent` palette key:
 
@@ -579,7 +579,7 @@ The tables below are the complete contents of `packages/shared/src/protocol.ts`.
   | `too_fast` | Too Fast | You're going too fast. | `forward` | sky |
   | `too_slow` | Too Slow | You're going too slowly. | `backward` | lavender |
   | `again` | Again | Please explain that again. | `rotate-left` | sky |
-  | `interesting` | Idea | I have an idea. | `lightbulb` | yellow |
+  | `idea` | Idea | I have an idea. | `lightbulb` | yellow |
 
   Both clients read labels, icons and colours from this one table. Adding a reaction type is a
   single-file change plus whatever art the icon needs.
@@ -983,7 +983,7 @@ Palette:
 | `--lr-pink` | `#FFB7D5` | Danger / attention (`confused`, `.lr-btn-danger`) |
 | `--lr-lavender` | `#C9B8FF` | `too_slow`, focus ring |
 | `--lr-mint` | `#ACE8D3` | `understand` |
-| `--lr-yellow` | `#FFE49A` | `interesting` |
+| `--lr-yellow` | `#FFE49A` | `idea` |
 | `--lr-muted` | `#6E6A63` | Secondary text |
 | `--lr-line` | `#282828` | Border colour (aliased to ink) |
 | `--lr-surface` | `#FFFFFF` | Card / panel fill |
@@ -1140,9 +1140,17 @@ Its raw material is three aggregate series the store now keeps per session: `rea
 id, which is what lets the report exist without touching §9 — the professor learns nothing
 after the class that they could not see during it.
 
-The PDF is drawn with pdf-lib: a KPI row, a stacked per-bucket timeline (following vs
-struggling vs faults, presence as a step line, poll ticks), reaction and poll bars, then every
-question with its answered-at time. The overlay is deliberately retro; the report deliberately
+The PDF is drawn with pdf-lib, in the order a professor would ask about it: a KPI row; an
+"at a glance" panel that states the findings in sentences (share following vs struggling, the
+roughest stretch, how the understanding checks moved, what was left unanswered, attendance); a
+stacked per-bucket timeline (following vs struggling vs faults, presence as a step line, poll
+ticks, the roughest stretch shaded) with the same buckets split by reaction type as a heatmap
+underneath; reaction totals with each type's busiest minute; the key moments in order (surges
+by the overlay's own thresholds, checks, questions, attendance); each poll with its response
+rate, how long it was open and the room's mood in the three minutes before; every question
+with its votes, share of the class and wait before it was answered; and a minute-by-minute
+table as an appendix. All of it is derived in `report.ts` from the three series above — more
+detail, no new data, so the §9 argument is unchanged. The overlay is deliberately retro; the report deliberately
 is not — it is read at a desk and filed. The typeface is Nanum Gothic, embedded **whole**: the
 subsetter in `@pdf-lib/fontkit` silently drops the outlines of Hangul glyphs from this face
 (the text layer survives, the page renders blank), and a 1.5 MB file once per lecture is

@@ -7,8 +7,9 @@
  * answered. That is right for the room and wrong for the professor afterwards,
  * who wants to know *when* the class got lost, which questions they never got
  * to, and how the understanding checks actually went. So this is a dashboard
- * on paper: the numbers up top, the class as a timeline underneath, then the
- * polls and every question in full.
+ * on paper: the numbers and the findings in sentences up top, the class as a
+ * timeline underneath, then the key moments in order, the polls, every
+ * question in full, and the whole class as a minute-by-minute table.
  *
  * It is built from the same aggregate material the overlay received. There is
  * no participant id anywhere in it, which is the whole reason it can be
@@ -98,7 +99,7 @@ const ROUGH_BAND = hex('#FFE4E6');
 const REACTION_COLOR: Record<ReactionType, RGB> = {
   understand: hex('#0D9488'),
   love: hex('#DB2777'),
-  interesting: hex('#D97706'),
+  idea: hex('#D97706'),
   confused: hex('#E11D48'),
   too_fast: hex('#EA580C'),
   again: hex('#7C3AED'),
@@ -117,7 +118,7 @@ const SIGNALS: Signal[] = ['following', 'struggling', 'fault'];
 const SIGNAL_OF: Record<ReactionType, Signal> = {
   understand: 'following',
   love: 'following',
-  interesting: 'following',
+  idea: 'following',
   confused: 'struggling',
   too_fast: 'struggling',
   again: 'struggling',
@@ -135,7 +136,7 @@ const SIGNAL_LABEL: Record<Signal, string> = {
   fault: "Can't see / can't hear",
 };
 /** Heatmap and table order: the three signals, grouped. */
-const TYPE_ORDER: ReactionType[] = ['understand', 'interesting', 'love', 'confused', 'too_fast', 'again', 'cant_see', 'cant_hear'];
+const TYPE_ORDER: ReactionType[] = ['understand', 'idea', 'love', 'confused', 'too_fast', 'again', 'cant_see', 'cant_hear'];
 
 /* ------------------------------------------------------------------ */
 /* Page geometry                                                       */
@@ -285,8 +286,9 @@ class Sheet {
     return lines.length;
   }
 
-  heading(t: string): void {
-    this.ensure(70);
+  /** `need` is the room the section's first block wants, so a heading is never left alone at the foot of a page. */
+  heading(t: string, need = 26): void {
+    this.ensure(44 + need);
     this.y -= 32;
     roundRect(this.page, { x: MARGIN, y: this.y - 2, w: 3, h: 13, r: 1.5, color: ACCENT });
     this.text(t, { x: MARGIN + 10, size: 12.5, bold: true });
@@ -548,7 +550,7 @@ function drawKpis(sh: Sheet, st: Stats): void {
   const minutes = st.span / 60_000;
   const tiles: [string, string, string, RGB][] = [
     ['STUDENTS', String(st.peakPresence), `${st.distinctStudents} joined · ${st.endPresence} at the end`, ACCENT],
-    ['REACTIONS', String(st.reactionsTotal), `${(st.reactionsTotal / minutes).toFixed(1)} a minute${st.peakPresence ? ` · ${(st.reactionsTotal / st.peakPresence).toFixed(1)} per student` : ''}`, SIGNAL_COLOR.following],
+    ['REACTIONS', String(st.reactionsTotal), `${(st.reactionsTotal / minutes).toFixed(1)} / min${st.peakPresence ? ` · ${(st.reactionsTotal / st.peakPresence).toFixed(1)} / student` : ''}`, SIGNAL_COLOR.following],
     ['QUESTIONS', String(st.questions.length), `${st.answered} answered · ${st.questions.length - st.answered} open`, hex('#D97706')],
     [
       'CHECKS & POLLS',
@@ -737,6 +739,8 @@ function drawTimeline(sh: Sheet, session: Session, st: Stats): void {
   const every = Math.max(1, Math.ceil(buckets / 8));
   for (let i = 0; i < buckets; i += every) {
     const label = `+${Math.round((i * bucketMs) / 60_000)}m`;
+    // The last tick would otherwise run into the end-of-class clock time.
+    if (plotX + i * slot + sh.regular.widthOfTextAtSize(label, 7) > plotX + plotW - 4) continue;
     sh.page.drawText(label, { x: plotX + i * slot, y: base - 19, size: 7, font: sh.regular, color: MUTED });
   }
   sh.page.drawText(clock(st.startedAt), { x: MARGIN, y: base - 19, size: 7, font: sh.bold, color: MUTED });
@@ -788,7 +792,7 @@ function drawTimeline(sh: Sheet, session: Session, st: Stats): void {
 }
 
 function drawReactionBreakdown(sh: Sheet, session: Session, st: Stats): void {
-  sh.heading('Reactions');
+  sh.heading('Reactions', st.byType.size * 17 + 24);
   if (st.reactionsTotal === 0) {
     sh.paragraph('No reactions were sent.', { color: MUTED });
     return;
@@ -834,7 +838,7 @@ function drawReactionBreakdown(sh: Sheet, session: Session, st: Stats): void {
 function drawMoments(sh: Sheet, session: Session, st: Stats): void {
   const moments = collectMoments(session, st);
   if (moments.length === 0) return;
-  sh.heading('Key moments, in order');
+  sh.heading('Key moments, in order', 60);
   const timeW = 78;
   sh.y -= 4;
   for (const m of moments) {
@@ -853,7 +857,7 @@ function drawMoments(sh: Sheet, session: Session, st: Stats): void {
 }
 
 function drawPolls(sh: Sheet, session: Session, st: Stats): void {
-  sh.heading('Understanding checks and polls');
+  sh.heading('Understanding checks and polls', st.polls.length ? 46 + st.polls[0]!.options.length * 16 : 26);
   if (st.polls.length === 0) {
     sh.paragraph('No understanding check was run.', { color: MUTED });
     return;
@@ -863,14 +867,19 @@ function drawPolls(sh: Sheet, session: Session, st: Stats): void {
   st.polls.forEach((poll, i) => {
     const n = poll.responses.size;
     const counts = pollCounts(poll);
-    sh.ensure(62 + poll.options.length * 16);
+    sh.ensure(46 + poll.options.length * 16);
     sh.y -= 20;
     const isCheck = poll.kind === 'understanding';
     if (isCheck) checkNo++;
     const when = `+${elapsed(st.startedAt, poll.createdAt)}  ·  ${clock(poll.createdAt)}`;
     sh.text(`${i + 1}.`, { size: 9, bold: true, color: ACCENT });
-    sh.paragraph(isCheck ? `Understanding check ${checkNo}` : poll.question, { x: MARGIN + 16, w: CONTENT_W - 16 - 110, size: 10.5, bold: true, lead: 0 });
+    const title = wrap(sh.bold, 10.5, CONTENT_W - 16 - 110, isCheck ? `Understanding check ${checkNo}` : poll.question);
+    sh.text(title[0]!, { x: MARGIN + 16, size: 10.5, bold: true });
     sh.page.drawText(when, { x: A4.w - MARGIN - sh.regular.widthOfTextAtSize(when, 8), y: sh.y, size: 8, font: sh.regular, color: MUTED });
+    for (const line of title.slice(1)) {
+      sh.y -= 13.5;
+      sh.text(line, { x: MARGIN + 16, size: 10.5, bold: true });
+    }
     sh.y -= 4;
     const labelW = 120;
     const numW = 70;
@@ -915,7 +924,7 @@ function pollColor(poll: Poll, optionId: string): RGB {
 }
 
 function drawQuestions(sh: Sheet, st: Stats): void {
-  sh.heading(`Questions (${st.questions.length}, most voted first)`);
+  sh.heading(`Questions (${st.questions.length}, most voted first)`, 70);
   if (st.questions.length === 0) {
     sh.paragraph('No questions were asked.', { color: MUTED });
     return;
@@ -983,13 +992,9 @@ function drawMinuteTable(sh: Sheet, session: Session, st: Stats): void {
   for (const p of st.polls) notes[rowOf(p.createdAt)] = p.kind === 'understanding' ? 'Check' : 'Poll';
   const cellMax = Math.max(1, ...counts.flatMap((m) => [...m.values()]));
 
-  const shortLabel: Record<ReactionType, string> = {
-    understand: 'Underst.', interesting: 'Interest.', love: 'Love it', confused: 'Confused',
-    too_fast: 'Too fast', again: 'Again', cant_see: "Can't see", cant_hear: "Can't hear",
-  };
   const cols: { label: string; w: number }[] = [
     { label: 'Time', w: 36 }, { label: 'Clock', w: 36 }, { label: 'Students', w: 40 },
-    ...TYPE_ORDER.map((t) => ({ label: shortLabel[t], w: 40 })),
+    ...TYPE_ORDER.map((t) => ({ label: clip(sh.bold, 6.5, 36, REACTION_META[t].label), w: 40 })),
     { label: 'Questions', w: 40 }, { label: 'Event', w: CONTENT_W - 36 - 36 - 40 - 40 * 8 - 40 },
   ];
   const xs: number[] = [];
@@ -1006,8 +1011,7 @@ function drawMinuteTable(sh: Sheet, session: Session, st: Stats): void {
   };
 
   const unit = rowMs === 60_000 ? 'Minute by minute' : `Every ${rowMs / 60_000} minutes`;
-  sh.heading(unit);
-  sh.ensure(18 + rowH * 4);
+  sh.heading(unit, 18 + rowH * 6);
   header();
   for (let r = 0; r < rows; r++) {
     if (sh.y - rowH < MARGIN + FOOTER_H) {

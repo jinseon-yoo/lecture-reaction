@@ -32,7 +32,7 @@ for (let m = 2; m < 50; m++) {
   const rough = m >= 20 && m <= 26;
   const tired = m >= 44;
   burst(m, 'understand', rough ? 1 : tired ? 2 : 4 + (m % 3));
-  if (m % 4 === 0) burst(m, 'interesting', 2);
+  if (m % 4 === 0) burst(m, 'idea', 2);
   if (m % 7 === 0) burst(m, 'love', 3);
   if (rough) { burst(m, 'confused', 6 + (m % 4)); burst(m, 'too_fast', 4); if (m === 23) burst(m, 'again', 9); }
   if (tired) burst(m, 'too_fast', 2);
