@@ -168,17 +168,21 @@ export type ErrorCode =
  */
 export type LimitScope = 'reaction' | 'question' | 'vote' | 'poll';
 
-/** The end-of-class PDF is ready to download — or why there is none. */
-export type ClassReportRef = { ready: true; error?: undefined } | { ready?: undefined; error: string };
+/**
+ * The end-of-class PDF: built and saved (`path`), built but not saved (the
+ * launcher offers Download as a retry), or why there is none.
+ */
+export type ClassReportRef =
+  | { ready: true; path?: string; error?: undefined }
+  | { ready?: undefined; path?: undefined; error: string };
 
 export type ServerMsg =
   /* both */
   | { t: 'error'; code: ErrorCode; message: string; scope?: LimitScope }
   | { t: 'pong' }
   /**
-   * `report` is professor-only: whether the PDF was built and can be
-   * downloaded from the launcher, or `{ error }` if it could not be. Nothing
-   * is saved until the professor asks for it.
+   * `report` is professor-only: whether the PDF was built, where it was
+   * saved, or `{ error }` if it could not be built.
    */
   | { t: 'session:ended'; at: number; report?: ClassReportRef }
   /* professor */

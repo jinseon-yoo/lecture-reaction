@@ -1135,8 +1135,9 @@ export function reportFileName(session: Session): string {
 }
 
 /**
- * Puts a finished report on disk, and only when the professor asked for it.
- * Downloading twice overwrites: same class, same bytes, same name.
+ * Puts a finished report on disk: once automatically when the class ends, and
+ * again if the professor clicks Download. Saving twice overwrites: same
+ * class, same bytes, same name.
  */
 export function saveReport(name: string, bytes: Uint8Array): { path: string } | { error: string } {
   try {

@@ -141,8 +141,8 @@ async function tunnelRequest(method: 'POST' | 'DELETE'): Promise<TunnelState> {
 export interface SessionLookup {
   exists: boolean;
   status: 'active' | 'ended';
-  /** Only for an ended class: the server built the PDF and holds it for download. */
-  report?: { ready: true };
+  /** Only for an ended class: the server built the PDF, and saved it at `path` unless that failed. */
+  report?: { ready: true; path?: string };
 }
 
 /**
@@ -159,7 +159,9 @@ export async function fetchSessionStatus(code: string): Promise<SessionLookup | 
       exists: data.exists,
       status: data.status === 'ended' ? 'ended' : 'active',
     };
-    if (data.report?.ready === true) lookup.report = { ready: true };
+    if (data.report?.ready === true) {
+      lookup.report = typeof data.report.path === 'string' ? { ready: true, path: data.report.path } : { ready: true };
+    }
     return lookup;
   } catch {
     return null;
@@ -167,9 +169,9 @@ export async function fetchSessionStatus(code: string): Promise<SessionLookup | 
 }
 
 /**
- * The Download Report button: asks the server to write the PDF it has been
- * holding since the class ended into the Downloads folder. Nothing is saved
- * before this is called.
+ * The Download Report button, shown only when the automatic save at class
+ * end failed: asks the server to write the PDF it is still holding into the
+ * Downloads folder again.
  */
 export async function downloadReport(code: string): Promise<{ path: string } | { error: string }> {
   try {

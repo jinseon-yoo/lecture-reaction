@@ -42,8 +42,9 @@ const TUNNEL_POLL_MS = 1_500;
 const DISPLAY_POLL_MS = 3_000;
 
 /**
- * The end-of-class PDF. The server builds it when the class ends and holds
- * it; `path` only exists once the professor has clicked Download Report.
+ * The end-of-class PDF. The server builds and saves it when the class ends;
+ * `path` is where. Without a path the save failed and the server still holds
+ * the bytes, so the launcher offers Download Report as a retry.
  */
 interface ReportInfo {
   /** The class it belongs to — the session state is reset before the click. */
@@ -195,7 +196,7 @@ export function Launcher() {
           setHandedOff(false);
           setStarting(false);
           // Before reset(): the report only exists in this response.
-          setReport(result.report ? { code } : null);
+          setReport(result.report ? { code, path: result.report.path } : null);
           reset();
           setEnded(true);
         }
@@ -213,7 +214,9 @@ export function Launcher() {
   // Socket still attached: the `session:ended` message carried the report.
   useEffect(() => {
     if (state.status !== 'ended' || !state.report) return;
-    setReport(state.report.ready && state.code ? { code: state.code } : { error: state.report.error });
+    setReport(
+      state.report.ready && state.code ? { code: state.code, path: state.report.path } : { error: state.report.error },
+    );
   }, [state.status, state.report, state.code]);
 
   const onDownload = useCallback(() => {
@@ -297,12 +300,19 @@ export function Launcher() {
             [ START CLASS ]
           </button>
 
-          {/* The server holds the PDF; nothing is on disk until this is
-              clicked. Clicking again after an error retries. */}
+          {/* Only when the automatic save failed: the server still holds the
+              PDF, and this asks it to try the save again. */}
           {report?.code && !report.path && (
-            <button type="button" className="lr-btn" onClick={onDownload} disabled={downloading}>
-              {downloading ? '[ Downloading… ]' : '[ Download Report ]'}
-            </button>
+            <div className="flex max-w-75 flex-col items-center gap-1.5">
+              {!report.error && (
+                <p className="lr-text max-w-75 text-center text-[10px] text-(--lr-muted)">
+                  The report could not be saved to Downloads.
+                </p>
+              )}
+              <button type="button" className="lr-btn" onClick={onDownload} disabled={downloading}>
+                {downloading ? '[ Saving… ]' : '[ Save Report Again ]'}
+              </button>
+            </div>
           )}
           {/* Revealing it is a desktop call, so in browser review mode the
               button is inert. */}

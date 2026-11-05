@@ -145,10 +145,11 @@ function handleHttp(req: IncomingMessage, res: ServerResponse): void {
     // Fast pre-check for the student page. Leaks nothing but existence/status.
     const code = normalizeCode(decodeURIComponent(pathname.slice('/api/session/'.length)));
     const session = code ? hub.store.getByCode(code) : undefined;
-    // Whether a report is waiting is the professor's business: the overlay
-    // asks over loopback, and nobody arriving through the tunnel is told. It
-    // outlives the session, which is reaped a minute after the class ends.
-    const report = code && !viaTunnel(req) && hub.hasReport(code) ? { ready: true } : undefined;
+    // The report (and where it was saved) is the professor's business: the
+    // overlay asks over loopback, and nobody arriving through the tunnel is
+    // told. It outlives the session, which is reaped a minute after the
+    // class ends.
+    const report = code && !viaTunnel(req) ? hub.reportStatus(code) : null;
     if (!session) return json(res, 200, { exists: false, status: 'unknown', ...(report ? { report } : {}) });
     return json(res, 200, {
       exists: session.status === 'active',

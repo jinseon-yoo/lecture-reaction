@@ -602,27 +602,26 @@ Click **End Class** on the strip and confirm. Every student immediately gets
 `Class ended. Thanks for participating.`, the code stops working, and the overlay
 closes. Starting another class generates a different code; nothing carries over.
 
-The moment you end the class, a **PDF report** is prepared and the launcher
-shows **Download Report**. Nothing is saved to your computer until you click it;
-the PDF then lands in your `Downloads` folder, and the button turns into
-**Show in Folder**. It is a dashboard of the whole lecture: how many students
+The moment you end the class, a **PDF report** is written to your `Downloads`
+folder and the launcher shows **Show in Folder**. If the save fails (a full disk,
+a missing folder), the launcher says so and offers **Save Report Again**. It is a
+dashboard of the whole lecture: how many students
 were there, the reactions as a timeline so you can see the minute the room
 stopped following, every understanding check with its result, and every question
 in full — with whether you answered it, and when. Nothing in it identifies a
 student; it is built from the same aggregate counts the overlay received. See
 [After the class](#after-the-class).
 
-Apart from a report you choose to download, nothing is stored. Reactions were
-never written down per student, and the questions go with the session.
+Apart from the report, nothing is stored. Reactions were never written down per
+student, and the questions go with the session.
 
 ## After the class
 
 Everything the overlay shows during a lecture is designed to be glanced at and
 forgotten — reactions float for a few seconds, questions leave when answered.
 That is right for the room and useless afterwards. So ending the class builds a
-report, and **Download Report** on the launcher's CLASS ENDED screen saves it as
-`Downloads/Lecture-React-<date>-<time>-<code>.pdf`. It is not saved unless you
-ask: skip the button and the report is gone when the app closes.
+report and saves it as `Downloads/Lecture-React-<date>-<time>-<code>.pdf`; the
+launcher's CLASS ENDED screen names the file and **Show in Folder** opens it.
 
 What is in it:
 
@@ -657,9 +656,10 @@ vote counts), so the privacy boundary in `docs/ARCHITECTURE.md` §9 is
 unchanged. There is no way to learn who asked or who voted from the PDF because
 the server never told the professor's side either.
 
-It is built by the server the instant the class ends, before the session is
-dropped from memory, in about half a second, and held in memory until you
-download it (the last five classes are kept while the app stays open). If the
+It is built and saved by the server the instant the class ends, before the
+session is dropped from memory, in about half a second. The last five classes'
+reports are also kept in memory while the app stays open, so a save that failed
+can be retried from the launcher with **Save Report Again**. If the
 fonts it needs are missing (`LECTURE_FONTS_DIR`, bundled with the app) the
 launcher says so and the class still ends normally. The emoji are optional: they
 ship in an `emoji` folder beside the fonts, and without them the report is the

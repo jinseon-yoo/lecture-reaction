@@ -85,7 +85,7 @@ export class Hub {
    * rather than on the session because the session is reaped a minute after
    * the class ends and the professor may take longer than that to pack up.
    */
-  private readonly reports = new Map<string, { name: string; bytes: Uint8Array }>();
+  private readonly reports = new Map<string, { name: string; bytes: Uint8Array; path?: string }>();
 
   private readonly bursts = new BurstAggregator((sessionId, burst) =>
     this.sendBurst(sessionId, burst),
@@ -309,17 +309,27 @@ export class Hub {
     return session;
   }
 
-  /** Whether a finished class has a report waiting to be downloaded. */
-  hasReport(code: string): boolean {
-    return this.reports.has(code);
+  /** A finished class's report: saved where, or held unsaved. `null` if none. */
+  reportStatus(code: string): ClassReportRef | null {
+    const held = this.reports.get(code);
+    if (!held) return null;
+    return held.path ? { ready: true, path: held.path } : { ready: true };
   }
 
-  /** The Download click: writes the held report to disk. `null` if there is none. */
+  /**
+   * The Download click: writes the held report to disk again. The usual case
+   * is a retry after the automatic save at class end failed (a full disk, a
+   * missing folder); otherwise it overwrites the same file with the same bytes.
+   * `null` if there is none.
+   */
   downloadReport(code: string): { path: string } | { error: string } | null {
     const held = this.reports.get(code);
     if (!held) return null;
     const saved = saveReport(held.name, held.bytes);
-    if ('path' in saved) console.log(`[lecture-react] report saved: ${saved.path}`);
+    if ('path' in saved) {
+      held.path = saved.path;
+      console.log(`[lecture-react] report saved: ${saved.path}`);
+    }
     return saved;
   }
 
@@ -337,14 +347,20 @@ export class Hub {
     // (or why not). It costs the professor about half a second at the end of
     // class; the students' sockets stay open meanwhile but the session is
     // already `ended`, so nothing they send in that window gets through.
-    // Built, not saved: it stays in memory until the professor downloads it.
+    // Saved straight away, so the professor has the file without doing
+    // anything; the bytes are also kept so a failed save can be retried from
+    // the launcher.
     let report: ClassReportRef;
     try {
+      const name = reportFileName(session);
       const bytes = await buildReportPdf(session, at);
-      this.reports.set(session.code, { name: reportFileName(session), bytes });
+      const saved = saveReport(name, bytes);
+      const path = 'path' in saved ? saved.path : undefined;
+      if (path) console.log(`[lecture-react] report saved: ${path}`);
+      this.reports.set(session.code, { name, bytes, path });
       // A handful of classes back is plenty; each report is ~1.5 MB.
       while (this.reports.size > MAX_KEPT_REPORTS) this.reports.delete(this.reports.keys().next().value!);
-      report = { ready: true };
+      report = path ? { ready: true, path } : { ready: true };
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
       console.error(`[lecture-react] report failed: ${error}`);
