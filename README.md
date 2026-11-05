@@ -17,7 +17,7 @@ interface, and nobody ever looks away from the slides.
 
 ## Download and run on Windows
 
-Open [GitHub Releases](https://github.com/jenna-studio/lecture-reaction/releases)
+Open [GitHub Releases](https://github.com/jinseon-yoo/lecture-reaction/releases)
 and choose a release with `Lecture-React-Windows-x64-Portable.zip` attached.
 Windows testing builds are marked **Pre-release**. If no ZIP is listed yet, it
 has not been uploaded; maintainers can use the [release instructions](#publish-a-github-release-without-actions) below.
@@ -72,7 +72,7 @@ email provider rejects its size or executable contents.
 
 ## Download and run on macOS
 
-Open [GitHub Releases](https://github.com/jenna-studio/lecture-reaction/releases)
+Open [GitHub Releases](https://github.com/jinseon-yoo/lecture-reaction/releases)
 and pick the archive for your Mac: `Lecture-React-macOS-AppleSilicon.zip` for an
 M-series Mac, `Lecture-React-macOS-Intel.zip` for an Intel one. (Apple menu ->
 About This Mac tells you which.) Each holds a single self-contained app: unzip it
@@ -1030,7 +1030,7 @@ re-enable them in repository settings. The block stops if a command fails.
 (
   set -e
   gh api --method PUT \
-    repos/jenna-studio/lecture-reaction/actions/permissions \
+    repos/jinseon-yoo/lecture-reaction/actions/permissions \
     -F enabled=false
 
   test -z "$(git status --porcelain)" || {
@@ -1058,7 +1058,7 @@ NOTES
 
   gh release create v0.1.0-beta.1 \
     "dist/Lecture-React-Windows-x64-Portable.zip" \
-    --repo jenna-studio/lecture-reaction \
+    --repo jinseon-yoo/lecture-reaction \
     --target "$(git rev-parse HEAD)" \
     --title "Lecture React v0.1.0 Beta 1 - Windows Portable" \
     --prerelease \
